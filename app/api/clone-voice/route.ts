@@ -1,30 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as fal from "@fal-ai/serverless-client";
+import { ElevenLabsClient } from "elevenlabs";
 
-fal.config({
-  credentials: process.env.FAL_KEY,
+const elevenlabs = new ElevenLabsClient({
+  apiKey: process.env.ELEVENLABS_API_KEY || "",
 });
 
 export async function POST(req: NextRequest) {
   try {
-    const { photoUrl, audioUrl } = await req.json();
+    const formData = await req.formData();
+    const audioFile = formData.get("file") as File;
 
-    if (!photoUrl || !audioUrl) {
-      return NextResponse.json({ error: "Missing photoUrl or audioUrl" }, { status: 400 });
+    if (!audioFile) {
+      return NextResponse.json({ error: "No audio file uploaded" }, { status: 400 });
     }
 
-    // Call LivePortrait audio-driven face animation via Fal.ai
-    const result: any = await fal.subscribe("fal-ai/live-portrait", {
-      input: {
-        image_url: photoUrl,
-        audio_url: audioUrl,
-      },
-      logs: true,
+    const voice = await elevenlabs.voices.add({
+      name: `Cinegram_User_${Date.now()}`,
+      files: [audioFile],
+      description: "Temporary instant clone for Cinegram card generation",
     });
 
-    return NextResponse.json({ videoUrl: result.video.url });
+    return NextResponse.json({ success: true, voiceId: voice.voice_id });
   } catch (err: any) {
-    console.error("Video Generation Error:", err);
-    return NextResponse.json({ error: err.message || "Failed to generate video card" }, { status: 500 });
+    console.error("Voice Clone Error:", err);
+    return NextResponse.json({ error: err.message || "Failed to clone voice" }, { status: 500 });
   }
 }
