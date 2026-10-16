@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "1.0.0-beta.2",
+    "elevenlabs": "^1.59.0",
     "@fal-ai/serverless-client": "^0.14.0",
     "lucide-react": "^0.300.0",
     "next": "14.2.5",
