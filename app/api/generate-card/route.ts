@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { clientIp, limitCardGeneration } from "../../../lib/rateLimit";
 
 // Cloning + TTS + uploads can take a while; the video itself renders on fal's queue.
 export const maxDuration = 60;
@@ -19,6 +20,15 @@ export async function POST(req: NextRequest) {
   let voiceId: string | null = null;
 
   try {
+    const { success, reset } = await limitCardGeneration(clientIp(req.headers));
+    if (!success) {
+      const retryAfter = Math.max(1, Math.ceil((reset - Date.now()) / 1000));
+      return NextResponse.json(
+        { error: `You've hit the limit for new Cinegrams. Try again in ${Math.ceil(retryAfter / 60)} minutes.` },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
+
     const formData = await req.formData();
     const photo = formData.get("photo") as File | null;
     const voiceSample = formData.get("voice") as File | null;
