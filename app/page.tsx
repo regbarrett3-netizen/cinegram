@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Film, Mic, Upload, CheckCircle2, Globe, Heart, PartyPopper, Cake, Trophy, CreditCard } from "lucide-react";
 
 const LANGUAGES = [
@@ -19,16 +19,137 @@ const OCCASIONS = [
   { id: "victory", icon: Trophy, name: "Congrats / Hype" },
 ];
 
+const MESSAGE_PLACEHOLDERS: Record<string, string> = {
+  Birthday: "Happy birthday! Wishing you the most amazing year yet...",
+  "Love & Romance": "Every day with you feels like a movie...",
+  Celebration: "Cheers to you and this incredible moment...",
+  "Congrats / Hype": "You did it! I knew you could pull this off...",
+};
+
+const RECORDING_SECONDS = 10;
+const POLL_INTERVAL_MS = 4000;
+const MAX_PHOTO_DIMENSION = 1024;
+
+// Shrink large phone photos so the upload stays well under serverless body limits
+async function downscalePhoto(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_PHOTO_DIMENSION / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not process photo"))), "image/jpeg", 0.9)
+  );
+}
+
 export default function CinegramApp() {
   const [lang, setLang] = useState("en");
   const [step, setStep] = useState(1);
   const [selectedOccasion, setSelectedOccasion] = useState("");
-  const [customPrompt, setCustomPrompt] = useState("");
+  const [message, setMessage] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [voiceRecorded, setVoiceRecorded] = useState(false);
+  const [voiceSample, setVoiceSample] = useState<Blob | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [videoResult, setVideoResult] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recordTimeoutRef.current) clearTimeout(recordTimeoutRef.current);
+      if (pollRef.current) clearTimeout(pollRef.current);
+      recorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const stopRecording = () => {
+    if (recordTimeoutRef.current) clearTimeout(recordTimeoutRef.current);
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  };
+
+  const startRecording = async () => {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+        setVoiceSample(new Blob(chunks, { type: recorder.mimeType }));
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setVoiceSample(null);
+      setIsRecording(true);
+      recordTimeoutRef.current = setTimeout(stopRecording, RECORDING_SECONDS * 1000);
+    } catch {
+      setError("Microphone access is needed to capture your voice.");
+    }
+  };
+
+  const pollForVideo = (requestId: string) => {
+    pollRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/card-status?requestId=${encodeURIComponent(requestId)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to check video status");
+
+        if (data.status === "COMPLETED") {
+          setVideoResult(data.videoUrl);
+          setLoading(false);
+          setStep(5);
+        } else {
+          setLoadingStatus(data.status === "IN_QUEUE" ? "Waiting for a render slot..." : "Animating your face...");
+          pollForVideo(requestId);
+        }
+      } catch (err: any) {
+        setError(err.message);
+        setLoading(false);
+      }
+    }, POLL_INTERVAL_MS);
+  };
+
+  const handleGenerate = async () => {
+    if (!photo || !voiceSample) return;
+    setError(null);
+    setLoading(true);
+    setLoadingStatus("Cloning your voice...");
+    try {
+      const formData = new FormData();
+      formData.append("photo", await downscalePhoto(photo), "photo.jpg");
+      const ext = voiceSample.type.includes("mp4") ? "mp4" : voiceSample.type.includes("ogg") ? "ogg" : "webm";
+      formData.append("voice", voiceSample, `voice.${ext}`);
+      formData.append("message", message);
+
+      const res = await fetch("/api/generate-card", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate video card");
+
+      setLoadingStatus("Rendering your Cinegram...");
+      pollForVideo(data.requestId);
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  const resetCard = () => {
+    setStep(1);
+    setSelectedOccasion("");
+    setMessage("");
+    setPhoto(null);
+    setVoiceSample(null);
+    setVideoResult(null);
+    setError(null);
+  };
 
   const handleCheckout = async () => {
     const res = await fetch("/api/checkout", { method: "POST" });
@@ -95,23 +216,26 @@ export default function CinegramApp() {
           </div>
         )}
 
-        {/* STEP 3: PROMPT */}
+        {/* STEP 3: MESSAGE */}
         {step === 3 && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-black text-center">Describe Your Scene</h2>
+            <h2 className="text-2xl font-black text-center">Write Your Message</h2>
             <div className="space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Custom Prompt</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-400">What should your Cinegram say?</label>
               <textarea
-                rows={3}
-                placeholder="E.g., An astronaut singing in outer space surrounded by glowing stars..."
-                value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
+                rows={4}
+                maxLength={500}
+                placeholder={MESSAGE_PLACEHOLDERS[selectedOccasion] || "Write your message..."}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm focus:outline-none focus:border-pink-500"
               />
+              <p className="text-xs text-slate-500 text-right">{message.length}/500</p>
             </div>
             <button
+              disabled={!message.trim()}
               onClick={() => setStep(4)}
-              className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 font-bold rounded-2xl text-base hover:opacity-90 transition"
+              className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 font-bold rounded-2xl text-base hover:opacity-90 transition disabled:opacity-50"
             >
               Continue to Face & Voice →
             </button>
@@ -132,32 +256,25 @@ export default function CinegramApp() {
             </div>
 
             <button
-              onClick={() => {
-                setIsRecording(true);
-                setTimeout(() => { setIsRecording(false); setVoiceRecorded(true); }, 4000);
-              }}
-              className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition ${
-                isRecording ? "bg-red-600 animate-pulse" : voiceRecorded ? "bg-emerald-600" : "bg-purple-600 hover:bg-purple-500"
+              disabled={loading}
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition disabled:opacity-50 ${
+                isRecording ? "bg-red-600 animate-pulse" : voiceSample ? "bg-emerald-600" : "bg-purple-600 hover:bg-purple-500"
               }`}
             >
               <Mic className="w-5 h-5" />
-              {isRecording ? "Recording Vocal Sample..." : voiceRecorded ? "Voice Captured!" : "Sing 10-Second Sample"}
+              {isRecording ? "Recording... Tap to Stop" : voiceSample ? "Voice Captured! Tap to Re-record" : `Record ${RECORDING_SECONDS}-Second Voice Sample`}
             </button>
 
             <button
-              disabled={!photo || !voiceRecorded || loading}
-              onClick={() => {
-                setLoading(true);
-                setTimeout(() => {
-                  setLoading(false);
-                  setVideoResult("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4");
-                  setStep(5);
-                }, 3000);
-              }}
+              disabled={!photo || !voiceSample || isRecording || loading}
+              onClick={handleGenerate}
               className="w-full py-4 bg-gradient-to-r from-amber-400 via-pink-500 to-purple-600 text-slate-950 font-black rounded-2xl text-lg disabled:opacity-50 hover:opacity-90 transition shadow-lg"
             >
-              {loading ? "Creating Your Cinegram..." : "🚀 GENERATE CINEGRAM!"}
+              {loading ? loadingStatus || "Creating Your Cinegram..." : "🚀 GENERATE CINEGRAM!"}
             </button>
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
           </div>
         )}
 
@@ -180,7 +297,7 @@ export default function CinegramApp() {
                 <CreditCard className="w-5 h-5" /> Download HD Video (No Watermark) — $2.99
               </button>
               <button
-                onClick={() => setStep(1)}
+                onClick={resetCard}
                 className="text-xs text-slate-400 hover:text-white transition"
               >
                 ← Create Another Cinegram
