@@ -1,34 +1,20 @@
+// Creates a $2.99 Stripe Checkout session tied to one finished video.
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import { appUrl, falStatus, stripeCreateCheckout } from "../../../lib/server";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2023-10-16",
-});
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "Cinegram HD Movie Card",
-              description: "Full HD 4K rendering with watermarks removed",
-            },
-            unit_amount: 299, // $2.99
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://cinegram.vercel.app"}/?status=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://cinegram.vercel.app"}/?status=cancelled`,
-    });
-
-    return NextResponse.json({ url: session.url });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const { requestId } = (await req.json()) as { requestId?: string };
+    if (!requestId) return NextResponse.json({ error: "Missing video id." }, { status: 400 });
+    // Only sell videos that actually finished.
+    const status = await falStatus(requestId);
+    if (status.state !== "done") return NextResponse.json({ error: "That video isn't ready." }, { status: 400 });
+    const url = await stripeCreateCheckout(requestId, appUrl(req));
+    return NextResponse.json({ url });
+  } catch (err) {
+    console.error("Checkout error:", err);
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
