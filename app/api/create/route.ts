@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isLang, isOccasion, MAX_MESSAGE, OCCASION_SCENE } from "../../../lib/i18n";
 import { elevenCloneVoice, elevenDeleteVoice, elevenSpeak, falSubmitAvatar, falUpload } from "../../../lib/server";
+import { isPresetVoice } from "../../../lib/voices";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,8 +27,11 @@ export async function POST(req: NextRequest) {
     if (!(photo instanceof Blob) || photo.size === 0 || photo.size > 4 * MB || !photo.type.startsWith("image/")) {
       return NextResponse.json({ error: "Please add a photo (under 4 MB)." }, { status: 400 });
     }
-    if (!(voice instanceof Blob) || voice.size < 10_000 || voice.size > 4 * MB) {
-      return NextResponse.json({ error: "Please record a voice sample of at least 10 seconds." }, { status: 400 });
+    // Either a ready-made voice id, or a recorded sample to clone.
+    const presetId = form.get("presetVoice");
+    const usePreset = isPresetVoice(presetId);
+    if (!usePreset && (!(voice instanceof Blob) || voice.size < 10_000 || voice.size > 4 * MB)) {
+      return NextResponse.json({ error: "Please record a voice sample of at least 10 seconds, or pick a voice." }, { status: 400 });
     }
     if (!isLang(lang) || !isOccasion(occasion)) {
       return NextResponse.json({ error: "Missing language or occasion." }, { status: 400 });
@@ -39,10 +43,15 @@ export async function POST(req: NextRequest) {
     // Upload the photo while the voice is being cloned.
     const photoUrlP = falUpload(photo, "selfie.jpg");
     photoUrlP.catch(() => undefined); // avoid an unhandled rejection if cloning fails first
-    voiceId = await elevenCloneVoice(voice);
-    const speech = await elevenSpeak(voiceId, message, lang);
-    await elevenDeleteVoice(voiceId);
-    voiceId = null;
+    let speech: Blob;
+    if (usePreset) {
+      speech = await elevenSpeak(presetId, message, lang);
+    } else {
+      voiceId = await elevenCloneVoice(voice as Blob);
+      speech = await elevenSpeak(voiceId, message, lang);
+      await elevenDeleteVoice(voiceId);
+      voiceId = null;
+    }
 
     const [photoUrl, audioUrl] = await Promise.all([photoUrlP, falUpload(speech, "message.mp3")]);
     const prompt = [OCCASION_SCENE[occasion], scene].filter(Boolean).join(". ");

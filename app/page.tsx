@@ -2,10 +2,11 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Film, Mic, Square, Upload, CheckCircle2, Globe, Heart, PartyPopper, Cake, Trophy, CreditCard, Download, Loader2, RotateCcw,
+  Film, Mic, Square, Upload, CheckCircle2, Globe, Heart, PartyPopper, Cake, Trophy, CreditCard, Download, Loader2, RotateCcw, Play, Pause,
 } from "lucide-react";
 import { LANGUAGES, MAX_MESSAGE, STRINGS, isLang, type Lang, type Occasion } from "../lib/i18n";
 import { shrinkPhoto, startRecording, toWav, type Recorder } from "../lib/media";
+import { PRESET_VOICES } from "../lib/voices";
 
 const OCCASIONS: { id: Occasion; icon: typeof Cake }[] = [
   { id: "bday", icon: Cake },
@@ -61,6 +62,11 @@ export default function CinegramApp() {
   const [recSeconds, setRecSeconds] = useState(0);
   const recorder = useRef<Recorder | null>(null);
   const [consent, setConsent] = useState(false);
+  const [voiceMode, setVoiceMode] = useState<"mine" | "preset">("mine");
+  const [presetVoice, setPresetVoice] = useState(PRESET_VOICES[0].id);
+  const [previews, setPreviews] = useState<Record<string, string> | null>(null);
+  const [playing, setPlaying] = useState<string | null>(null);
+  const player = useRef<HTMLAudioElement | null>(null);
 
   const [phase, setPhase] = useState<Phase>("upload");
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -171,6 +177,37 @@ export default function CinegramApp() {
 
   useEffect(() => () => recorder.current?.cancel(), []);
 
+  // Load the ready-made voice samples the first time someone opens that tab.
+  useEffect(() => {
+    if (voiceMode !== "preset" || previews) return;
+    fetch("/api/voices")
+      .then((r) => r.json())
+      .then((d: { previews?: Record<string, string> }) => setPreviews(d.previews || {}))
+      .catch(() => setPreviews({}));
+  }, [voiceMode, previews]);
+
+  function togglePreview(id: string) {
+    const url = previews?.[id];
+    if (!url) return;
+    player.current?.pause();
+    if (playing === id) {
+      setPlaying(null);
+      return;
+    }
+    const a = new Audio(url);
+    a.onended = () => setPlaying(null);
+    player.current = a;
+    a.play().then(() => setPlaying(id)).catch(() => setPlaying(null));
+  }
+
+  function chooseVoiceMode(mode: "mine" | "preset") {
+    if (recording) return;
+    player.current?.pause();
+    setPlaying(null);
+    setVoiceMode(mode);
+    setError(null);
+  }
+
   function setVoiceBlob(b: Blob | null) {
     setVoice(b);
     setVoicePreview((old) => {
@@ -229,14 +266,17 @@ export default function CinegramApp() {
   }
 
   async function generate() {
-    if (!photo || !voice || !consent) return;
+    const hasVoice = voiceMode === "preset" || !!voice;
+    if (!photo || !hasVoice || !consent) return;
+    player.current?.pause();
     setError(null);
     setNotice(null);
     setPhase("upload");
     setStep("working");
     const form = new FormData();
     form.append("photo", photo, "selfie.jpg");
-    form.append("voice", voice, "sample.wav");
+    if (voiceMode === "preset") form.append("presetVoice", presetVoice);
+    else if (voice) form.append("voice", voice, "sample.wav");
     form.append("lang", lang);
     form.append("occasion", occasion);
     form.append("message", message.trim());
@@ -287,7 +327,7 @@ export default function CinegramApp() {
   }
 
   const phaseText = { upload: t.sUpload, clone: t.sClone, queue: t.sQueue, render: t.sRender }[phase];
-  const canGenerate = !!photo && !!voice && consent && !recording && message.trim().length > 0;
+  const canGenerate = !!photo && (voiceMode === "preset" || !!voice) && consent && !recording && message.trim().length > 0;
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-start p-4 sm:p-8 font-sans">
@@ -426,6 +466,57 @@ export default function CinegramApp() {
             </label>
 
             <div className="space-y-3 text-left">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.voiceChoice}</p>
+              <div role="tablist" className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-950 border border-slate-800 p-1">
+                {(["mine", "preset"] as const).map((m) => (
+                  <button
+                    key={m}
+                    role="tab"
+                    aria-selected={voiceMode === m}
+                    onClick={() => chooseVoiceMode(m)}
+                    className={`py-2.5 rounded-xl text-sm font-bold transition ${voiceMode === m ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"}`}
+                  >
+                    {m === "mine" ? t.myVoice : t.pickVoice}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {voiceMode === "preset" ? (
+              <div className="space-y-3 text-left">
+                <p className="text-xs text-slate-400">{t.pickTip}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {PRESET_VOICES.map((v) => {
+                    const chosen = presetVoice === v.id;
+                    return (
+                      <div
+                        key={v.id}
+                        className={`flex items-center gap-2 rounded-2xl border p-2 transition ${chosen ? "border-pink-500 bg-pink-600/15" : "border-slate-800 bg-slate-950"}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => togglePreview(v.id)}
+                          disabled={!previews?.[v.id]}
+                          aria-label={`${t.voices[v.key]} ▶`}
+                          className="shrink-0 w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center disabled:opacity-30"
+                        >
+                          {playing === v.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPresetVoice(v.id)}
+                          aria-pressed={chosen}
+                          className="flex-1 min-w-0 text-left text-sm font-semibold leading-tight py-1"
+                        >
+                          {t.voices[v.key]}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+            <div className="space-y-3 text-left">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.voiceTip}</p>
               <p className="rounded-2xl bg-slate-950 border border-slate-800 p-4 text-sm leading-relaxed">{t.script}</p>
               {!recording ? (
@@ -452,10 +543,11 @@ export default function CinegramApp() {
                 />
               </label>
             </div>
+            )}
 
             <label className="flex items-start gap-3 text-left text-sm text-slate-300">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 w-4 h-4 accent-pink-500" />
-              <span>{t.consent}</span>
+              <span>{voiceMode === "preset" ? t.consentFace : t.consent}</span>
             </label>
 
             <button
