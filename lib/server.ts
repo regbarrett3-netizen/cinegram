@@ -11,14 +11,36 @@ function need(name: string): string {
   return v;
 }
 
+/** Turns the providers' billing and permission errors into plain fixes. */
+function explain(url: string, status: number, body: string): string | null {
+  const b = body.toLowerCase();
+  if (url.includes("fal.")) {
+    if (b.includes("balance") || b.includes("locked") || b.includes("billing") || status === 402)
+      return "The video service (fal.ai) is out of credit. Add credit at fal.ai/dashboard/billing, then try again.";
+    if (status === 401 || status === 403) return "The video service (fal.ai) rejected the FAL_KEY. Check the key in Vercel.";
+  }
+  if (url.includes("elevenlabs")) {
+    if (b.includes("voice_cloning") || b.includes("instant voice") || b.includes("paid_plan") || b.includes("subscription"))
+      return "Your ElevenLabs plan doesn't include voice cloning (it needs Starter or higher). Upgrade at elevenlabs.io, or use \"Pick a voice\" for now.";
+    if (b.includes("quota") || b.includes("credits") || status === 402)
+      return "ElevenLabs is out of credits for this month. Add credits at elevenlabs.io, then try again.";
+    if (b.includes("missing_permissions") || b.includes("permission"))
+      return "The ElevenLabs key is missing a permission. It needs Text to Speech (Access) and Voices (Write).";
+    if (status === 401) return "ElevenLabs rejected the ELEVENLABS_API_KEY. Check the key in Vercel.";
+  }
+  if (url.includes("stripe.com") && status === 401) return "Stripe rejected the STRIPE_SECRET_KEY. Check the key in Vercel.";
+  return null;
+}
+
 async function failText(res: Response, what: string): Promise<never> {
   let detail = "";
   try {
-    detail = (await res.text()).slice(0, 300);
+    detail = (await res.text()).slice(0, 500);
   } catch {
     /* ignore */
   }
-  throw new Error(`${what} failed (${res.status}) ${detail}`.trim());
+  console.error(`${what} failed`, res.status, res.url, detail);
+  throw new Error(explain(res.url, res.status, detail) || `${what} failed (${res.status}) ${detail.slice(0, 200)}`.trim());
 }
 
 /* ---------------- fal.ai ---------------- */
