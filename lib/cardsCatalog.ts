@@ -2,6 +2,12 @@
 // Occasions, card wording and page text in the same six languages as the video cards.
 
 import type { Lang } from "./i18n";
+import { EN } from "./cardText/en";
+import { ES } from "./cardText/es";
+import { FR } from "./cardText/fr";
+import { PT } from "./cardText/pt";
+import { ZH } from "./cardText/zh";
+import { YUE } from "./cardText/yue";
 
 export const CARD_PRICE_CENTS = 199;
 
@@ -38,7 +44,7 @@ export const OCCASION_NAMES: L<Record<CardOccasion, string>> = {
 
 export type CardDef = { id: string; occasion: CardOccasion };
 
-export const CARDS: CardDef[] = [
+const BASE_CARDS: CardDef[] = [
   { id: "bdayCandles", occasion: "birthday" }, { id: "bdayBalloons", occasion: "birthday" }, { id: "bdayBouquet", occasion: "birthday" },
   { id: "loveConstellation", occasion: "love" }, { id: "lovePaperHearts", occasion: "love" }, { id: "loveRoseWreath", occasion: "love" },
   { id: "annivTrees", occasion: "anniversary" }, { id: "annivLanterns", occasion: "anniversary" }, { id: "annivRings", occasion: "anniversary" },
@@ -53,10 +59,18 @@ export const CARDS: CardDef[] = [
   { id: "holidayVillage", occasion: "holidays" }, { id: "holidayWreath", occasion: "holidays" }, { id: "holidayTree", occasion: "holidays" },
 ];
 
+/** Cards 04–20 per occasion (composed artwork in cardArtMore.ts). */
+const MORE_CARDS: CardDef[] = CARD_OCCASIONS.flatMap((occasion) =>
+  Array.from({ length: 17 }, (_, i) => ({ id: `${occasion}${String(i + 4).padStart(2, "0")}`, occasion })),
+);
+
+/** 20 cards per occasion: the three originals first, then the rest. */
+export const CARDS: CardDef[] = CARD_OCCASIONS.flatMap((o) => [...BASE_CARDS.filter((c) => c.occasion === o), ...MORE_CARDS.filter((c) => c.occasion === o)]);
+
 export const cardById = (id: unknown) => CARDS.find((c) => c.id === id) || null;
 export const cardsFor = (o: CardOccasion) => CARDS.filter((c) => c.occasion === o);
 
-export const CARD_TEXT: L<Record<string, CardText>> = {
+const BASE_TEXT: L<Record<string, CardText>> = {
   en: {
     bdayCandles: { h: "Make a Wish", m: "May this year hold more light than the last, and every candle stand for something you're grateful for." },
     bdayBalloons: { h: "Happy Birthday", m: "Here's to letting go of whatever weighs you down and rising toward everything that makes you glad." },
@@ -285,6 +299,15 @@ export const CARD_TEXT: L<Record<string, CardText>> = {
     holidayWreath: { h: "節日快樂", m: "願你日日開心，心情輕鬆，屋企充滿歡樂。" },
     holidayTree: { h: "喜悅與光明", m: "願節日嘅光芒陪住你成年。" },
   },
+};
+
+export const CARD_TEXT: L<Record<string, CardText>> = {
+  en: { ...BASE_TEXT.en, ...EN },
+  es: { ...BASE_TEXT.es, ...ES },
+  fr: { ...BASE_TEXT.fr, ...FR },
+  pt: { ...BASE_TEXT.pt, ...PT },
+  zh: { ...BASE_TEXT.zh, ...ZH },
+  yue: { ...BASE_TEXT.yue, ...YUE },
 };
 
 type Ui = {

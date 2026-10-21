@@ -21,10 +21,32 @@ type Props = {
 export function CardCanvas({ artKey, lang, to, from, watermark, maxScale = 2, className = "", label }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
+  const [visible, setVisible] = useState(false);
 
+  // Only draw once the card is near the screen (an occasion page has 20 of them).
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisible(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(c);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const c = ref.current;
+    if (!c || !visible) return;
     let cancelled = false;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const width = c.clientWidth || 300;
@@ -35,7 +57,7 @@ export function CardCanvas({ artKey, lang, to, from, watermark, maxScale = 2, cl
     return () => {
       cancelled = true;
     };
-  }, [artKey, lang, to, from, watermark, maxScale]);
+  }, [artKey, lang, to, from, watermark, maxScale, visible]);
 
   return (
     <canvas
