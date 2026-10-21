@@ -7,7 +7,7 @@ import {
 import { LANGUAGES, MAX_MESSAGE, STRINGS, isLang, type Lang, type Occasion } from "../lib/i18n";
 import { shrinkPhoto, startRecording, toWav, type Recorder } from "../lib/media";
 import { PRESET_VOICES } from "../lib/voices";
-import { CARD_UI } from "../lib/cardsCatalog";
+import { CARDS_PROMO } from "../lib/cardsPromo";
 
 const OCCASIONS: { id: Occasion; icon: typeof Cake }[] = [
   { id: "bday", icon: Cake },
@@ -389,7 +389,7 @@ export default function CinegramApp() {
               href={`/cards?lang=${lang}`}
               className="block w-full rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/20 transition"
             >
-              {CARD_UI[lang].promo}
+              {CARDS_PROMO[lang]}
             </a>
           </div>
         )}
@@ -413,7 +413,7 @@ export default function CinegramApp() {
               href={`/cards?lang=${lang}`}
               className="block w-full rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/20 transition"
             >
-              {CARD_UI[lang].promo}
+              {CARDS_PROMO[lang]}
             </a>
             <button onClick={() => setStep("lang")} className="text-xs text-slate-400 hover:text-white">{t.back}</button>
           </div>
