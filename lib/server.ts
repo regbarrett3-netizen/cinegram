@@ -1,6 +1,8 @@
 // Server-only helpers: fal.ai (storage + queue), ElevenLabs (voice clone + speech), Stripe.
 // Plain fetch calls, so there are no SDK versions to break the build.
 
+import { CARD_PRICE_CENTS } from "./cardsCatalog";
+
 export const AVATAR_MODEL = "fal-ai/kling-video/ai-avatar/v2/standard";
 // Status and result URLs use only owner/app, not the full model path.
 const AVATAR_APP = "fal-ai/kling-video";
@@ -191,6 +193,51 @@ export async function stripePaidRequestId(sessionId: string): Promise<string | n
   const s = (await res.json()) as { payment_status?: string; metadata?: { request_id?: string } };
   if (s.payment_status !== "paid") return null;
   return s.metadata?.request_id || null;
+}
+
+/* ---------------- Quick Cards ($1.99, no AI) ---------------- */
+
+export async function stripeCreateCardCheckout(o: {
+  cardId: string;
+  occasion: string;
+  title: string;
+  lang: string;
+  appUrl: string;
+}): Promise<string> {
+  const back = `${o.appUrl}/cards/${o.occasion}?card=${encodeURIComponent(o.cardId)}&lang=${encodeURIComponent(o.lang)}`;
+  const body = new URLSearchParams({
+    mode: "payment",
+    "line_items[0][quantity]": "1",
+    "line_items[0][price_data][currency]": "usd",
+    "line_items[0][price_data][unit_amount]": String(CARD_PRICE_CENTS),
+    "line_items[0][price_data][product_data][name]": `Cinegram Quick Card: ${o.title}`,
+    "line_items[0][price_data][product_data][description]": "Ready-made art card, full-size download without the watermark",
+    "metadata[kind]": "card",
+    "metadata[card_id]": o.cardId,
+    success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${back}&status=cancelled`,
+  });
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: { ...stripeAuth(), "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) await failText(res, "Checkout");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
+/** Returns the paid Quick Card's id, or null if the session isn't a paid card purchase. */
+export async function stripePaidCardId(sessionId: string): Promise<string | null> {
+  if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return null;
+  const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
+    headers: stripeAuth(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; card_id?: string } };
+  if (s.payment_status !== "paid" || s.metadata?.kind !== "card") return null;
+  return s.metadata?.card_id || null;
 }
 
 export function appUrl(req: Request): string {
