@@ -2,6 +2,7 @@
 // Plain fetch calls, so there are no SDK versions to break the build.
 
 import { CARD_PRICE_CENTS } from "./cardsCatalog";
+import { ACTION_PRICE_CENTS } from "./action/catalog";
 
 export const AVATAR_MODEL = "fal-ai/kling-video/ai-avatar/v2/standard";
 // Status and result URLs use only owner/app, not the full model path.
@@ -238,6 +239,42 @@ export async function stripePaidCardId(sessionId: string): Promise<string | null
   const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; card_id?: string } };
   if (s.payment_status !== "paid" || s.metadata?.kind !== "card") return null;
   return s.metadata?.card_id || null;
+}
+
+/* ---------------- Action Cards ($2.99 video) ---------------- */
+
+export async function stripeCreateActionCheckout(o: { actionId: string; title: string; lang: string; appUrl: string }): Promise<string> {
+  const back = `${o.appUrl}/action?card=${encodeURIComponent(o.actionId)}&lang=${encodeURIComponent(o.lang)}`;
+  const body = new URLSearchParams({
+    mode: "payment",
+    "line_items[0][quantity]": "1",
+    "line_items[0][price_data][currency]": "usd",
+    "line_items[0][price_data][unit_amount]": String(ACTION_PRICE_CENTS),
+    "line_items[0][price_data][product_data][name]": `Cinegram Action Card: ${o.title}`,
+    "line_items[0][price_data][product_data][description]": "Animated video card, downloadable without the watermark",
+    "metadata[kind]": "action",
+    "metadata[action_id]": o.actionId,
+    success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${back}&status=cancelled`,
+  });
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: { ...stripeAuth(), "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) await failText(res, "Checkout");
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
+/** Returns the paid action card's id, or null if the session isn't a paid action-card purchase. */
+export async function stripePaidActionId(sessionId: string): Promise<string | null> {
+  if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return null;
+  const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, { headers: stripeAuth(), cache: "no-store" });
+  if (!res.ok) return null;
+  const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; action_id?: string } };
+  if (s.payment_status !== "paid" || s.metadata?.kind !== "action") return null;
+  return s.metadata?.action_id || null;
 }
 
 export function appUrl(req: Request): string {

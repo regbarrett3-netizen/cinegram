@@ -6,6 +6,7 @@ import { CardsHeader } from "../../components/cards/CardsHeader";
 import { useCardLang } from "../../components/cards/useCardLang";
 import { CARD_OCCASIONS, CARD_UI, OCCASION_COVER, OCCASION_EMOJI, OCCASION_NAMES, cardsFor } from "../../lib/cardsCatalog";
 import { cardSerif } from "../../lib/cardFont";
+import { ACTION_PROMO } from "../../lib/cardsPromo";
 
 export default function QuickCardsHome() {
   const [lang, setLang] = useCardLang();
@@ -24,6 +25,11 @@ export default function QuickCardsHome() {
         <p className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200">
           <Sparkles className="w-3.5 h-3.5" /> {ui.noAi} · {ui.price}
         </p>
+        <div className="pt-2">
+          <Link href={`/action?lang=${lang}`} className="inline-block rounded-2xl border border-pink-400/40 bg-pink-400/10 px-4 py-3 text-sm font-semibold text-pink-100 hover:bg-pink-400/20 transition">
+            🎈 {ACTION_PROMO[lang]}
+          </Link>
+        </div>
         <h2 className="pt-4 text-lg font-bold">{ui.pickOccasion}</h2>
       </section>
 

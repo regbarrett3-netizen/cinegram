@@ -7,7 +7,7 @@ import {
 import { LANGUAGES, MAX_MESSAGE, STRINGS, isLang, type Lang, type Occasion } from "../lib/i18n";
 import { shrinkPhoto, startRecording, toWav, type Recorder } from "../lib/media";
 import { PRESET_VOICES } from "../lib/voices";
-import { CARDS_PROMO } from "../lib/cardsPromo";
+import { ACTION_PROMO, CARDS_PROMO } from "../lib/cardsPromo";
 
 const OCCASIONS: { id: Occasion; icon: typeof Cake }[] = [
   { id: "bday", icon: Cake },
@@ -391,6 +391,12 @@ export default function CinegramApp() {
             >
               {CARDS_PROMO[lang]}
             </a>
+            <a
+              href={`/action?lang=${lang}`}
+              className="block w-full rounded-2xl border border-pink-400/30 bg-pink-400/10 px-4 py-3 text-sm font-semibold text-pink-100 hover:bg-pink-400/20 transition"
+            >
+              {ACTION_PROMO[lang]}
+            </a>
           </div>
         )}
 
@@ -414,6 +420,12 @@ export default function CinegramApp() {
               className="block w-full rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/20 transition"
             >
               {CARDS_PROMO[lang]}
+            </a>
+            <a
+              href={`/action?lang=${lang}`}
+              className="block w-full rounded-2xl border border-pink-400/30 bg-pink-400/10 px-4 py-3 text-sm font-semibold text-pink-100 hover:bg-pink-400/20 transition"
+            >
+              {ACTION_PROMO[lang]}
             </a>
             <button onClick={() => setStep("lang")} className="text-xs text-slate-400 hover:text-white">{t.back}</button>
           </div>
