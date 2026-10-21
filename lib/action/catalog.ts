@@ -135,6 +135,7 @@ type Ui = {
   buy: string; previewNote: string; watermark: string; checking: string; paidTitle: string;
   make: string; making: (pct: number) => string; download: string; share: string; again: string;
   noVideo: string; cancelled: string; notPaid: string; error: string; close: string;
+  soundOn: string; soundOff: string; musicNote: string;
 };
 
 export const ACTION_UI: L<Ui> = {
@@ -142,36 +143,36 @@ export const ACTION_UI: L<Ui> = {
     title: "Action Cards", tagline: "Animated cards that come to life. Download as a video to send anywhere.", price: "$2.99", pick: "Tap a card to watch it", quickCards: "← Quick Cards", promo: "Action Cards — animated video cards, $2.99 →", videoNote: "8-second video",
     buy: "Buy video card — $2.99", previewNote: "Preview. Buy to download the video without the watermark.", watermark: "PREVIEW", checking: "Checking your payment…", paidTitle: "Thank you! Your action card is ready.",
     make: "Create my video", making: (p) => `Creating your video… ${p}%`, download: "Download video", share: "Share video", again: "Make it again",
-    noVideo: "This browser can't record video. Please open this page in Safari or Chrome.", cancelled: "Checkout was cancelled. Your card is still here.", notPaid: "We couldn't confirm that payment. If you were charged, contact us with your receipt.", error: "Something went wrong. Please try again.", close: "Close",
+    noVideo: "This browser can't record video. Please open this page in Safari or Chrome.", cancelled: "Checkout was cancelled. Your card is still here.", notPaid: "We couldn't confirm that payment. If you were charged, contact us with your receipt.", error: "Something went wrong. Please try again.", close: "Close", soundOn: "Turn sound on", soundOff: "Mute", musicNote: "With original music",
   },
   es: {
     title: "Tarjetas en acción", tagline: "Tarjetas animadas que cobran vida. Descárgalas en video para enviarlas a donde quieras.", price: "2,99 US$", pick: "Toca una tarjeta para verla", quickCards: "← Tarjetas rápidas", promo: "Tarjetas en acción: videotarjetas animadas, 2,99 US$ →", videoNote: "Video de 8 segundos",
     buy: "Comprar videotarjeta — 2,99 US$", previewNote: "Vista previa. Cómprala para descargar el video sin marca de agua.", watermark: "VISTA PREVIA", checking: "Verificando tu pago…", paidTitle: "¡Gracias! Tu tarjeta en acción está lista.",
     make: "Crear mi video", making: (p) => `Creando tu video… ${p}%`, download: "Descargar video", share: "Compartir video", again: "Crearlo de nuevo",
-    noVideo: "Este navegador no puede grabar video. Abre esta página en Safari o Chrome.", cancelled: "Se canceló el pago. Tu tarjeta sigue aquí.", notPaid: "No pudimos confirmar el pago. Si se te cobró, contáctanos con tu recibo.", error: "Algo salió mal. Inténtalo de nuevo.", close: "Cerrar",
+    noVideo: "Este navegador no puede grabar video. Abre esta página en Safari o Chrome.", cancelled: "Se canceló el pago. Tu tarjeta sigue aquí.", notPaid: "No pudimos confirmar el pago. Si se te cobró, contáctanos con tu recibo.", error: "Algo salió mal. Inténtalo de nuevo.", close: "Cerrar", soundOn: "Activar sonido", soundOff: "Silenciar", musicNote: "Con música original",
   },
   fr: {
     title: "Cartes animées", tagline: "Des cartes qui prennent vie. Télécharge-les en vidéo pour les envoyer partout.", price: "2,99 $ US", pick: "Touche une carte pour la regarder", quickCards: "← Cartes express", promo: "Cartes animées : cartes vidéo, 2,99 $ US →", videoNote: "Vidéo de 8 secondes",
     buy: "Acheter la carte vidéo — 2,99 $ US", previewNote: "Aperçu. Achète-la pour télécharger la vidéo sans filigrane.", watermark: "APERÇU", checking: "Vérification du paiement…", paidTitle: "Merci ! Ta carte animée est prête.",
     make: "Créer ma vidéo", making: (p) => `Création de ta vidéo… ${p} %`, download: "Télécharger la vidéo", share: "Partager la vidéo", again: "Recommencer",
-    noVideo: "Ce navigateur ne peut pas enregistrer de vidéo. Ouvre cette page dans Safari ou Chrome.", cancelled: "Paiement annulé. Ta carte est toujours là.", notPaid: "Nous n'avons pas pu confirmer le paiement. Si tu as été débité, contacte-nous avec ton reçu.", error: "Un problème est survenu. Réessaie.", close: "Fermer",
+    noVideo: "Ce navigateur ne peut pas enregistrer de vidéo. Ouvre cette page dans Safari ou Chrome.", cancelled: "Paiement annulé. Ta carte est toujours là.", notPaid: "Nous n'avons pas pu confirmer le paiement. Si tu as été débité, contacte-nous avec ton reçu.", error: "Un problème est survenu. Réessaie.", close: "Fermer", soundOn: "Activer le son", soundOff: "Couper le son", musicNote: "Avec musique originale",
   },
   pt: {
     title: "Cartões animados", tagline: "Cartões que ganham vida. Descarrega em vídeo para enviar para qualquer lado.", price: "2,99 USD", pick: "Toca num cartão para o ver", quickCards: "← Cartões rápidos", promo: "Cartões animados: cartões em vídeo, 2,99 USD →", videoNote: "Vídeo de 8 segundos",
     buy: "Comprar cartão em vídeo — 2,99 USD", previewNote: "Pré-visualização. Compra para descarregar o vídeo sem marca de água.", watermark: "PRÉ-VISUALIZAÇÃO", checking: "A verificar o pagamento…", paidTitle: "Obrigado! O teu cartão animado está pronto.",
     make: "Criar o meu vídeo", making: (p) => `A criar o teu vídeo… ${p}%`, download: "Descarregar vídeo", share: "Partilhar vídeo", again: "Criar de novo",
-    noVideo: "Este navegador não consegue gravar vídeo. Abre esta página no Safari ou no Chrome.", cancelled: "O pagamento foi cancelado. O teu cartão continua aqui.", notPaid: "Não conseguimos confirmar o pagamento. Se foste cobrado, contacta-nos com o recibo.", error: "Algo correu mal. Tenta outra vez.", close: "Fechar",
+    noVideo: "Este navegador não consegue gravar vídeo. Abre esta página no Safari ou no Chrome.", cancelled: "O pagamento foi cancelado. O teu cartão continua aqui.", notPaid: "Não conseguimos confirmar o pagamento. Se foste cobrado, contacta-nos com o recibo.", error: "Algo correu mal. Tenta outra vez.", close: "Fechar", soundOn: "Ligar o som", soundOff: "Silenciar", musicNote: "Com música original",
   },
   zh: {
     title: "动态贺卡", tagline: "会动起来的贺卡，可下载成视频随处发送。", price: "2.99 美元", pick: "点击贺卡即可观看", quickCards: "← 快速贺卡", promo: "动态贺卡：动画视频贺卡，2.99 美元 →", videoNote: "8 秒视频",
     buy: "购买视频贺卡 — 2.99 美元", previewNote: "这是预览。购买后即可下载无水印的视频。", watermark: "预览", checking: "正在确认付款……", paidTitle: "谢谢！你的动态贺卡已准备好。",
     make: "生成我的视频", making: (p) => `正在生成视频……${p}%`, download: "下载视频", share: "分享视频", again: "重新生成",
-    noVideo: "这个浏览器无法录制视频，请用 Safari 或 Chrome 打开此页面。", cancelled: "付款已取消，你的贺卡还在这里。", notPaid: "我们无法确认这笔付款。如果已扣款，请带上收据联系我们。", error: "出了点问题，请重试。", close: "关闭",
+    noVideo: "这个浏览器无法录制视频，请用 Safari 或 Chrome 打开此页面。", cancelled: "付款已取消，你的贺卡还在这里。", notPaid: "我们无法确认这笔付款。如果已扣款，请带上收据联系我们。", error: "出了点问题，请重试。", close: "关闭", soundOn: "打开声音", soundOff: "静音", musicNote: "配原创音乐",
   },
   yue: {
     title: "動態賀卡", tagline: "識郁嘅賀卡，可以下載做影片隨處send。", price: "2.99 美元", pick: "撳一張賀卡就可以睇", quickCards: "← 快速賀卡", promo: "動態賀卡：動畫影片賀卡，2.99 美元 →", videoNote: "8 秒影片",
     buy: "買影片賀卡 — 2.99 美元", previewNote: "呢個係預覽。買咗就可以下載冇水印嘅影片。", watermark: "預覽", checking: "確認緊付款……", paidTitle: "多謝！你張動態賀卡整好喇。",
     make: "整我嘅影片", making: (p) => `整緊你嘅影片……${p}%`, download: "下載影片", share: "分享影片", again: "再整一次",
-    noVideo: "呢個瀏覽器錄唔到影片，請用 Safari 或者 Chrome 開呢頁。", cancelled: "付款取消咗，你張賀卡仲喺度。", notPaid: "我哋確認唔到呢筆付款。如果已經扣咗錢，請帶埋收據聯絡我哋。", error: "出咗啲問題，請再試。", close: "關閉",
+    noVideo: "呢個瀏覽器錄唔到影片，請用 Safari 或者 Chrome 開呢頁。", cancelled: "付款取消咗，你張賀卡仲喺度。", notPaid: "我哋確認唔到呢筆付款。如果已經扣咗錢，請帶埋收據聯絡我哋。", error: "出咗啲問題，請再試。", close: "關閉", soundOn: "開聲", soundOff: "靜音", musicNote: "配原創音樂",
   },
 };

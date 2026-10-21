@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, Clapperboard, CreditCard, Download, Loader2, RotateCcw, Share2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, Clapperboard, CreditCard, Download, Loader2, RotateCcw, Share2, Volume2, VolumeX, X } from "lucide-react";
 import { ActionCanvas } from "../../components/action/ActionCanvas";
 import { CardsHeader } from "../../components/cards/CardsHeader";
 import { useCardLang } from "../../components/cards/useCardLang";
 import { ACTION_IDS, ACTION_TEXT, ACTION_UI, isActionId, type ActionId } from "../../lib/action/catalog";
 import { recordVideo, videoSupport } from "../../lib/action/render";
+import { musicFor } from "../../lib/action/music";
 import { CARD_UI } from "../../lib/cardsCatalog";
 import { CARD_FONT_FAMILY, cardSerif } from "../../lib/cardFont";
 import { isLang, type Lang } from "../../lib/i18n";
@@ -16,6 +17,27 @@ type Saved = { id: string; to: string; from: string };
 const SAVE_KEY = "cinegram:action";
 const BTN_MAIN = "w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 font-bold rounded-2xl text-base hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2";
 const BTN_SUB = "w-full py-3 rounded-2xl border border-slate-700 bg-slate-800 font-semibold hover:bg-slate-700 transition flex items-center justify-center gap-2 disabled:opacity-50";
+
+type AC = typeof AudioContext;
+
+/** One shared audio context, created during a tap so phones allow sound. */
+function audioCtx(ref: { current: AudioContext | null }): AudioContext | null {
+  try {
+    if (!ref.current) {
+      const w = window as unknown as { AudioContext?: AC; webkitAudioContext?: AC };
+      const Ctor = w.AudioContext || w.webkitAudioContext;
+      if (!Ctor) return null;
+      ref.current = new Ctor();
+      // iOS 17+: play even when the ring/silent switch is on silent.
+      const nav = navigator as unknown as { audioSession?: { type: string } };
+      if (nav.audioSession) nav.audioSession.type = "playback";
+    }
+    if (ref.current.state === "suspended") void ref.current.resume();
+    return ref.current;
+  } catch {
+    return null;
+  }
+}
 
 function save(s: Saved) {
   try { sessionStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* private mode */ }
@@ -39,6 +61,44 @@ export default function ActionCardsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [canShare, setCanShare] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false);
+  mutedRef.current = muted;
+  const ctxRef = useRef<AudioContext | null>(null);
+  const srcRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const cycleAt = useRef(0);
+  const playToken = useRef(0);
+
+  function stopMusic() {
+    playToken.current++;
+    try { srcRef.current?.stop(); } catch { /* already stopped */ }
+    srcRef.current = null;
+  }
+
+  /** (Re)starts the music in step with the preview animation. */
+  function startMusic(id: ActionId) {
+    stopMusic();
+    cycleAt.current = performance.now();
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    const token = playToken.current;
+    musicFor(id).then((buf) => {
+      if (token !== playToken.current || !ctxRef.current) return;
+      const offset = (performance.now() - cycleAt.current) / 1000;
+      if (offset >= buf.duration) return;
+      if (!gainRef.current) { gainRef.current = ctx.createGain(); gainRef.current.connect(ctx.destination); }
+      gainRef.current.gain.value = mutedRef.current ? 0 : 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(gainRef.current);
+      src.start(0, offset);
+      srcRef.current = src;
+    }).catch(() => { /* play silently */ });
+  }
+
+  useEffect(() => { if (gainRef.current) gainRef.current.gain.value = muted ? 0 : 1; }, [muted]);
+  useEffect(() => () => stopMusic(), []);
 
   // Coming back from Stripe.
   useEffect(() => {
@@ -76,9 +136,14 @@ export default function ActionCardsPage() {
     setVideo((v) => { if (v) URL.revokeObjectURL(v.url); return null; });
   }, [to, from, lang, selected]);
 
-  function open(id: ActionId) { setSelected(id); setPhase("detail"); setError(null); setNotice(null); }
+  function open(id: ActionId) {
+    audioCtx(ctxRef);
+    void musicFor(id).catch(() => undefined);
+    setSelected(id); setPhase("detail"); setError(null); setNotice(null);
+  }
   function close() {
     if (progress !== null) return;
+    stopMusic();
     setSelected(null); setPhase("detail"); setError(null); setNotice(null);
     if (window.location.search.includes("card=")) window.history.replaceState(null, "", `/action?lang=${lang}`);
   }
@@ -98,9 +163,14 @@ export default function ActionCardsPage() {
   async function make() {
     if (!selected) return;
     if (!videoSupport()) { setError(ui.noVideo); return; }
+    const ctx = audioCtx(ctxRef); // created inside the tap so the recording can include sound
+    stopMusic();
     setError(null); setProgress(0);
     try {
-      const file = await recordVideo(selected, { lang, to, from, fontFamily: CARD_FONT_FAMILY }, setProgress);
+      let audio: { ctx: AudioContext; buffer: AudioBuffer } | undefined;
+      try { if (ctx) audio = { ctx, buffer: await musicFor(selected) }; } catch { audio = undefined; }
+      const file = await recordVideo(selected, { lang, to, from, fontFamily: CARD_FONT_FAMILY }, setProgress, audio);
+      stopMusic();
       setVideo({ file, url: URL.createObjectURL(file) });
     } catch (e) {
       setError((e as Error).message === "NO_VIDEO" ? ui.noVideo : ui.error);
@@ -128,7 +198,7 @@ export default function ActionCardsPage() {
         <h1 className="text-4xl sm:text-5xl font-semibold text-amber-100" style={{ fontFamily: cardSerif.style.fontFamily }}>{ui.title}</h1>
         <p className="text-slate-300 text-sm sm:text-base">{ui.tagline}</p>
         <p className="inline-flex items-center gap-2 rounded-full border border-pink-400/30 bg-pink-400/10 px-3 py-1 text-xs font-semibold text-pink-200">
-          <Clapperboard className="w-3.5 h-3.5" /> {ui.videoNote} · {ui.price}
+          <Clapperboard className="w-3.5 h-3.5" /> {ui.videoNote} · {ui.musicNote} · {ui.price}
         </p>
         <p className="pt-3 text-sm text-slate-400">{ui.pick}</p>
       </section>
@@ -156,9 +226,18 @@ export default function ActionCardsPage() {
               {notice && <p role="status" className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">{notice}</p>}
 
               {video ? (
-                <video src={video.url} controls autoPlay loop playsInline muted className="w-full aspect-[9/16] rounded-2xl bg-black" />
+                <video src={video.url} controls autoPlay loop playsInline className="w-full aspect-[9/16] rounded-2xl bg-black" />
               ) : (
-                <ActionCanvas id={selected} lang={lang} to={to} from={from} watermark={phase === "paid" ? undefined : ui.watermark} playing maxScale={1} label={ACTION_TEXT[lang][selected].h} />
+                <div className="relative">
+                  <ActionCanvas id={selected} lang={lang} to={to} from={from} watermark={phase === "paid" ? undefined : ui.watermark} playing={progress === null} maxScale={1} label={ACTION_TEXT[lang][selected].h} onCycle={() => startMusic(selected)} />
+                  <button
+                    onClick={() => { audioCtx(ctxRef); setMuted((m) => !m); }}
+                    aria-label={muted ? ui.soundOn : ui.soundOff}
+                    className="absolute top-3 right-3 rounded-full bg-black/45 p-2.5 text-white backdrop-blur hover:bg-black/60"
+                  >
+                    {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                  </button>
+                </div>
               )}
 
               {phase === "checking" && <p className="flex items-center justify-center gap-2 text-sm text-slate-300"><Loader2 className="w-4 h-4 animate-spin" /> {ui.checking}</p>}

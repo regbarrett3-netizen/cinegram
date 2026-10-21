@@ -129,8 +129,18 @@ export async function loadFonts(id: ActionId, o: FrameOpts) {
   }
 }
 
-export function videoSupport(): { mime: string; ext: string } | null {
+/** Best recording format; with `audio`, prefers formats that carry a sound track. */
+export function videoSupport(audio = false): { mime: string; ext: string } | null {
   if (typeof MediaRecorder === "undefined" || typeof HTMLCanvasElement === "undefined" || !("captureStream" in HTMLCanvasElement.prototype)) return null;
+  if (typeof MediaRecorder === "undefined") return null;
+  const withAudio = [
+    { mime: "video/mp4;codecs=avc1.42E01F,mp4a.40.2", ext: "mp4" },
+    { mime: "video/mp4;codecs=avc1.4D401F,mp4a.40.2", ext: "mp4" },
+    { mime: "video/mp4;codecs=avc1,mp4a.40.2", ext: "mp4" },
+    { mime: "video/webm;codecs=vp9,opus", ext: "webm" },
+    { mime: "video/webm;codecs=vp8,opus", ext: "webm" },
+  ];
+  if (audio) { const a = withAudio.find((x) => MediaRecorder.isTypeSupported(x.mime)); if (a) return a; }
   const options = [
     // H.264 first: plays everywhere, including iPhone Photos and Messages.
     { mime: "video/mp4;codecs=avc1.42E01F", ext: "mp4" },
@@ -146,8 +156,8 @@ export function videoSupport(): { mime: string; ext: string } | null {
 }
 
 /** Plays the card in real time on a hidden canvas and records it. Takes about 9 seconds. */
-export async function recordVideo(id: ActionId, o: FrameOpts, onProgress: (pct: number) => void): Promise<File> {
-  const sup = videoSupport();
+export async function recordVideo(id: ActionId, o: FrameOpts, onProgress: (pct: number) => void, audio?: { ctx: AudioContext; buffer: AudioBuffer }): Promise<File> {
+  const sup = videoSupport(!!audio);
   if (!sup) throw new Error("NO_VIDEO");
   await loadFonts(id, o);
   const canvas = document.createElement("canvas");
@@ -157,11 +167,22 @@ export async function recordVideo(id: ActionId, o: FrameOpts, onProgress: (pct: 
     const c = prep(canvas, 1);
     drawFrame(c, id, 0, o);
     const stream = (canvas as HTMLCanvasElement & { captureStream(fps?: number): MediaStream }).captureStream(30);
-    const rec = new MediaRecorder(stream, { mimeType: sup.mime, videoBitsPerSecond: 6_000_000 });
+    let src: AudioBufferSourceNode | null = null;
+    if (audio) {
+      // The music goes into the recording and also plays aloud while it records.
+      const dest = audio.ctx.createMediaStreamDestination();
+      src = audio.ctx.createBufferSource();
+      src.buffer = audio.buffer;
+      src.connect(dest);
+      src.connect(audio.ctx.destination);
+      for (const tr of dest.stream.getAudioTracks()) stream.addTrack(tr);
+    }
+    const rec = new MediaRecorder(stream, { mimeType: sup.mime, videoBitsPerSecond: 6_000_000, audioBitsPerSecond: 160_000 });
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
     const done = new Promise<void>((res, rej) => { rec.onstop = () => res(); rec.onerror = () => rej(new Error("Recording failed")); });
     rec.start(250);
+    src?.start();
     const start = performance.now();
     await new Promise<void>((res) => {
       const tick = () => {
@@ -176,6 +197,7 @@ export async function recordVideo(id: ActionId, o: FrameOpts, onProgress: (pct: 
       requestAnimationFrame(tick);
     });
     rec.stop();
+    try { src?.stop(); } catch { /* already ended */ }
     stream.getTracks().forEach((tr) => tr.stop());
     await done;
     onProgress(100);

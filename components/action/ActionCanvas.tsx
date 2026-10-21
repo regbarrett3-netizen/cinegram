@@ -18,16 +18,20 @@ type Props = {
   maxScale?: number;
   className?: string;
   label?: string;
+  /** Called each time the playing animation starts over (used to restart the music). */
+  onCycle?: () => void;
 };
 
 /** An action card drawn live, exactly as it will appear in the video. */
-export function ActionCanvas({ id, lang, to, from, watermark, playing = false, maxScale = 1, className = "", label }: Props) {
+export function ActionCanvas({ id, lang, to, from, watermark, playing = false, maxScale = 1, className = "", label, onCycle }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
   const [ready, setReady] = useState(false);
   // Latest text options, read by the animation loop without restarting it.
   const opts = useRef({ lang, to, from, watermark, fontFamily: CARD_FONT_FAMILY });
   opts.current = { lang, to, from, watermark, fontFamily: CARD_FONT_FAMILY };
+  const cycleRef = useRef(onCycle);
+  cycleRef.current = onCycle;
 
   useEffect(() => {
     const c = ref.current;
@@ -53,9 +57,12 @@ export function ActionCanvas({ id, lang, to, from, watermark, playing = false, m
         return;
       }
       const start = performance.now();
+      let last = -1;
       const loop = () => {
         if (stopped) return;
         const t = ((performance.now() - start) / 1000) % (VIDEO_LEN + 0.6);
+        if (t < last || last < 0) cycleRef.current?.();
+        last = t;
         c.setTransform(scale, 0, 0, scale, 0, 0);
         drawFrame(c, id, t, opts.current);
         setReady(true);
