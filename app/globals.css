@@ -2,7 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #020617;
-  color: #ffffff;
+:root {
+  --ink: #fbf4ff;
 }
+
+body {
+  background-color: #0b0814;
+  color: var(--ink);
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, rgba(236, 72, 153, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(147, 51, 234, 0.18), transparent 60%),
+    radial-gradient(800px 600px at 50% 120%, rgba(245, 158, 11, 0.1), transparent 60%);
+  background-attachment: fixed;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .page { @apply min-h-screen w-full flex flex-col items-center px-4 pb-16 sm:px-8; }
+  .panel { @apply w-full rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_20px_60px_-20px_rgba(0,0,0,0.6)]; }
+  .btn-primary { @apply inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 via-fuchsia-500 to-purple-600 px-5 py-4 text-base font-bold text-white shadow-lg shadow-pink-500/20 transition hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:active:scale-100; }
+  .btn-secondary { @apply inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-5 py-3 font-semibold text-white transition hover:bg-white/10 disabled:opacity-50; }
+  .btn-ghost { @apply inline-flex items-center gap-1 text-sm text-white/60 transition hover:text-white; }
+  .field { @apply mt-1.5 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3.5 text-base text-white placeholder-white/30 outline-none transition focus:border-pink-400/70 focus:ring-2 focus:ring-pink-500/20; }
+  .label { @apply text-sm font-semibold text-white/80; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80; }
+  .title-serif { font-family: var(--font-serif, Georgia, serif); }
+  .tile { @apply relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] text-left transition hover:-translate-y-0.5 hover:border-pink-400/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-500; }
+  .tile-selected { @apply border-pink-400 ring-2 ring-pink-500/40; }
+  .notice { @apply rounded-2xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100; }
+  .alert { @apply rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-100; }
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+@keyframes card-reveal { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+.card-reveal { animation: card-reveal .7s cubic-bezier(.2,.8,.2,1) both; }

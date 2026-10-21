@@ -170,8 +170,8 @@ export async function stripeCreateCheckout(requestId: string, appUrl: string): P
     "line_items[0][price_data][product_data][name]": "Cinegram HD Video Card",
     "line_items[0][price_data][product_data][description]": "Download your video card without the preview watermark",
     "metadata[request_id]": requestId,
-    success_url: `${appUrl}/?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/?status=cancelled`,
+    success_url: `${appUrl}/video?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${appUrl}/video?status=cancelled`,
   });
   const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
@@ -275,6 +275,37 @@ export async function stripePaidActionId(sessionId: string): Promise<string | nu
   const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; action_id?: string } };
   if (s.payment_status !== "paid" || s.metadata?.kind !== "action") return null;
   return s.metadata?.action_id || null;
+}
+
+/* ---------------- 1-2-3 send flow ---------------- */
+
+export async function stripeCreateSendCheckout(o: { orderId: string; title: string; cents: number; appUrl: string; toName: string }): Promise<{ url: string; id: string }> {
+  const back = `${o.appUrl}/?order=${encodeURIComponent(o.orderId)}`;
+  const body = new URLSearchParams({
+    mode: "payment",
+    "line_items[0][quantity]": "1",
+    "line_items[0][price_data][currency]": "usd",
+    "line_items[0][price_data][unit_amount]": String(o.cents),
+    "line_items[0][price_data][product_data][name]": `Cinegram: ${o.title}`,
+    "line_items[0][price_data][product_data][description]": `Emailed to ${o.toName.slice(0, 60)} as soon as payment completes`,
+    "metadata[kind]": "send",
+    "metadata[order_id]": o.orderId,
+    success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${back}&status=cancelled`,
+  });
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { ...stripeAuth(), "Content-Type": "application/x-www-form-urlencoded" }, body });
+  if (!res.ok) await failText(res, "Checkout");
+  const data = (await res.json()) as { url: string; id: string };
+  return { url: data.url, id: data.id };
+}
+
+/** True only when the session is paid and belongs to this order. */
+export async function stripeSendPaid(sessionId: string, orderId: string): Promise<boolean> {
+  if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return false;
+  const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, { headers: stripeAuth(), cache: "no-store" });
+  if (!res.ok) return false;
+  const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; order_id?: string } };
+  return s.payment_status === "paid" && s.metadata?.kind === "send" && s.metadata?.order_id === orderId;
 }
 
 export function appUrl(req: Request): string {

@@ -1,660 +1,377 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import {
-  Film, Mic, Square, Upload, CheckCircle2, Globe, Heart, PartyPopper, Cake, Trophy, CreditCard, Download, Loader2, RotateCcw, Play, Pause,
-} from "lucide-react";
-import { LANGUAGES, MAX_MESSAGE, STRINGS, isLang, type Lang, type Occasion } from "../lib/i18n";
-import { shrinkPhoto, startRecording, toWav, type Recorder } from "../lib/media";
-import { PRESET_VOICES } from "../lib/voices";
-import { ACTION_PROMO, CARDS_PROMO } from "../lib/cardsPromo";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Camera, Check, CheckCircle2, ChevronRight, Loader2, Lock, Mail, RotateCcw, Sparkles, Trash2, Video, Volume2, VolumeX } from "lucide-react";
+import { SiteHeader } from "../components/SiteHeader";
+import { useCardLang } from "../components/cards/useCardLang";
+import { CardCanvas } from "../components/cards/CardCanvas";
+import { ActionCanvas } from "../components/action/ActionCanvas";
+import { useCardMusic } from "../components/action/useCardMusic";
+import { CARD_OCCASIONS, CARD_TEXT, CARD_UI, OCCASION_COVER, OCCASION_EMOJI, OCCASION_NAMES, cardById, cardsFor, isCardOccasion, type CardOccasion } from "../lib/cardsCatalog";
+import { ACTION_TEXT, ACTION_UI, POSTER_T, isActionId, type ActionId } from "../lib/action/catalog";
+import { posterJpeg } from "../lib/action/render";
+import { cardJpeg } from "../lib/cardRender";
+import { CARD_FONT_FAMILY } from "../lib/cardFont";
+import { shrinkPhoto } from "../lib/media";
+import { loadImage } from "../lib/polaroid";
+import { OCCASION_ACTIONS, PRICE, WIZARD_KEY, actionTextFor, priceLabel, type WizardState } from "../lib/send";
+import { SITE } from "../lib/siteText";
+import { isEmail } from "../lib/emailCheck";
 
-const OCCASIONS: { id: Occasion; icon: typeof Cake }[] = [
-  { id: "bday", icon: Cake },
-  { id: "love", icon: Heart },
-  { id: "party", icon: PartyPopper },
-  { id: "victory", icon: Trophy },
-];
+type Step = 1 | 2 | 3 | 4 | "done";
+type Choice = { kind: "quick"; id: string } | { kind: "action"; id: ActionId };
+type Saved = WizardState & { choice?: Choice | null; photoUrl?: string | null };
+type Delivery = { state: "checking" | "sent" | "failed" | "unpaid"; toName?: string; toEmail?: string; link?: string; error?: string };
 
-type Step = "lang" | "occasion" | "write" | "capture" | "working" | "preview" | "checking" | "paid";
-type Phase = "upload" | "clone" | "queue" | "render";
-
-const SAVE_KEY = "cinegram:last";
-const MIN_SECONDS = 10;
-const MAX_SECONDS = 30;
-const POLL_MS = 4000;
-const GIVE_UP_MS = 12 * 60 * 1000;
-
-const BTN_MAIN =
-  "w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 font-bold rounded-2xl text-base hover:opacity-90 transition disabled:opacity-50";
-
-function save(data: { lang: Lang; requestId: string; videoUrl: string }) {
-  try {
-    sessionStorage.setItem(SAVE_KEY, JSON.stringify(data));
-  } catch {
-    /* private mode */
-  }
+function loadSaved(): Saved {
+  try { return JSON.parse(sessionStorage.getItem(WIZARD_KEY) || "{}") as Saved; } catch { return {}; }
 }
-function load(): { lang: Lang; requestId: string; videoUrl: string } | null {
-  try {
-    const raw = sessionStorage.getItem(SAVE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+function persist(s: Saved) {
+  try { sessionStorage.setItem(WIZARD_KEY, JSON.stringify(s)); } catch { /* private mode */ }
 }
 
-export default function CinegramApp() {
-  const [lang, setLang] = useState<Lang>("en");
-  const t = STRINGS[lang];
-  const [step, setStep] = useState<Step>("lang");
+export default function SendFlow() {
+  const [lang, setLang] = useCardLang();
+  const t = SITE[lang];
+  const music = useCardMusic();
 
-  const [occasion, setOccasion] = useState<Occasion>("bday");
-  const [recipient, setRecipient] = useState("");
-  const [message, setMessage] = useState("");
-  const [messageEdited, setMessageEdited] = useState(false);
-  const [scene, setScene] = useState("");
-
-  const [photo, setPhoto] = useState<Blob | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [voice, setVoice] = useState<Blob | null>(null);
-  const [voicePreview, setVoicePreview] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [recSeconds, setRecSeconds] = useState(0);
-  const recorder = useRef<Recorder | null>(null);
-  const [consent, setConsent] = useState(false);
-  const [voiceMode, setVoiceMode] = useState<"mine" | "preset">("mine");
-  const [presetVoice, setPresetVoice] = useState(PRESET_VOICES[0].id);
-  const [previews, setPreviews] = useState<Record<string, string> | null>(null);
-  const [playing, setPlaying] = useState<string | null>(null);
-  const player = useRef<HTMLAudioElement | null>(null);
-
-  const [phase, setPhase] = useState<Phase>("upload");
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>(1);
+  const [occasion, setOccasion] = useState<CardOccasion | null>(null);
+  const [toName, setToName] = useState("");
+  const [toEmail, setToEmail] = useState("");
+  const [fromName, setFromName] = useState("");
+  const [choice, setChoice] = useState<Choice | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<HTMLImageElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const order = useRef<{ id: string; sessionId: string } | null>(null);
+  const top = useRef<HTMLDivElement>(null);
 
-  // Fill in the default greeting until the person writes their own.
+  // Restore an unfinished card, or confirm a payment when Stripe sends the buyer back.
   useEffect(() => {
-    if (!messageEdited) setMessage(t.greet[occasion](recipient.trim()));
-  }, [lang, occasion, recipient, messageEdited, t]);
-
-  // Coming back from Stripe.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const sid = params.get("session_id");
-    const cancelled = params.get("status") === "cancelled";
-    const saved = load();
-    if (saved && isLang(saved.lang)) setLang(saved.lang);
-    if (sid) {
-      window.history.replaceState(null, "", "/");
-      setStep("checking");
-      fetch(`/api/unlock?session_id=${encodeURIComponent(sid)}`)
-        .then((r) => r.json())
-        .then((d: { paid?: boolean; videoUrl?: string }) => {
-          if (d.paid && d.videoUrl) {
-            setVideoUrl(d.videoUrl);
-            setSessionId(sid);
-            setStep("paid");
-          } else {
-            setError(STRINGS[saved?.lang && isLang(saved.lang) ? saved.lang : "en"].notPaid);
-            if (saved) restorePreview(saved);
-            else setStep("lang");
-          }
-        })
-        .catch(() => {
-          setError(STRINGS[saved?.lang && isLang(saved.lang) ? saved.lang : "en"].notPaid);
-          setStep(saved ? "preview" : "lang");
-        });
-    } else if (cancelled && saved) {
-      window.history.replaceState(null, "", "/");
-      restorePreview(saved);
-      setNotice(STRINGS[isLang(saved.lang) ? saved.lang : "en"].cancelled);
-    }
+    const p = new URLSearchParams(window.location.search);
+    const s = loadSaved();
+    if (s.occasion && isCardOccasion(s.occasion)) setOccasion(s.occasion);
+    setToName(s.toName || ""); setToEmail(s.toEmail || ""); setFromName(s.fromName || "");
+    if (s.choice) setChoice(s.choice);
+    if (s.photoUrl) { setPhotoUrl(s.photoUrl); loadImage(s.photoUrl).then(setPhoto).catch(() => undefined); }
+    const id = p.get("order"), sid = p.get("session_id");
+    if (id && sid) { order.current = { id, sessionId: sid }; setStep("done"); deliver(); }
+    else if (id && p.get("status") === "cancelled" && s.choice) { setStep(4); setNotice(SITE[s.lang || "en"].cancelled); window.history.replaceState(null, "", "/"); }
+    else if (s.choice && s.toName) setStep(4);
+    else if (s.toName && s.occasion) setStep(3);
+    else if (s.occasion) setStep(2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function restorePreview(saved: { requestId: string; videoUrl: string }) {
-    setRequestId(saved.requestId);
-    setVideoUrl(saved.videoUrl);
-    setStep("preview");
-  }
-
-  // Poll while the video renders.
   useEffect(() => {
-    if (step !== "working" || !requestId) return;
-    const started = Date.now();
-    let stopped = false;
-    const tick = async () => {
-      if (stopped) return;
-      if (Date.now() - started > GIVE_UP_MS) {
-        setError(t.error);
-        setStep("capture");
-        return;
-      }
-      try {
-        const s = (await (await fetch(`/api/status?id=${encodeURIComponent(requestId)}`)).json()) as
-          { state: string; videoUrl?: string; error?: string };
-        if (stopped) return;
-        if (s.state === "done" && s.videoUrl) {
-          setVideoUrl(s.videoUrl);
-          save({ lang, requestId, videoUrl: s.videoUrl });
-          setStep("preview");
-          return;
-        }
-        if (s.state === "failed") {
-          setError(`${t.error} ${s.error || ""}`.trim());
-          setStep("capture");
-          return;
-        }
-        setPhase(s.state === "queued" ? "queue" : "render");
-      } catch {
-        /* network blip: keep polling */
-      }
-      setTimeout(tick, POLL_MS);
-    };
-    const first = setTimeout(tick, POLL_MS);
-    return () => {
-      stopped = true;
-      clearTimeout(first);
-    };
-  }, [step, requestId, lang, t]);
+    if (step !== "done") persist({ occasion: occasion || undefined, toName, toEmail, fromName, lang, choice, photoUrl });
+  }, [occasion, toName, toEmail, fromName, lang, choice, photoUrl, step]);
 
-  // Recording timer, with an automatic stop at the limit.
-  useEffect(() => {
-    if (!recording) return;
-    const started = Date.now();
-    const id = setInterval(() => {
-      const s = Math.floor((Date.now() - started) / 1000);
-      setRecSeconds(s);
-      if (s >= MAX_SECONDS) stopRec();
-    }, 250);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recording]);
+  useEffect(() => { top.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [step]);
+  useEffect(() => { if (step !== 4) music.stop(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [step]);
 
-  useEffect(() => () => recorder.current?.cancel(), []);
+  function go(s: Step) { setError(null); setNotice(null); setStep(s); }
 
-  // Load the ready-made voice samples the first time someone opens that tab.
-  useEffect(() => {
-    if (voiceMode !== "preset" || previews) return;
-    fetch("/api/voices")
-      .then((r) => r.json())
-      .then((d: { previews?: Record<string, string> }) => setPreviews(d.previews || {}))
-      .catch(() => setPreviews({}));
-  }, [voiceMode, previews]);
-
-  function togglePreview(id: string) {
-    const url = previews?.[id];
-    if (!url) return;
-    player.current?.pause();
-    if (playing === id) {
-      setPlaying(null);
-      return;
-    }
-    const a = new Audio(url);
-    a.onended = () => setPlaying(null);
-    player.current = a;
-    a.play().then(() => setPlaying(id)).catch(() => setPlaying(null));
+  function nextFromWho() {
+    if (!toName.trim() || !fromName.trim()) return setError(t.namesNeeded);
+    if (!isEmail(toEmail.trim())) return setError(t.emailInvalid);
+    go(3);
   }
 
-  function chooseVoiceMode(mode: "mine" | "preset") {
-    if (recording) return;
-    player.current?.pause();
-    setPlaying(null);
-    setVoiceMode(mode);
-    setError(null);
+  function pick(c: Choice) {
+    music.unlock();
+    setChoice(c);
+    go(4);
   }
 
-  function setVoiceBlob(b: Blob | null) {
-    setVoice(b);
-    setVoicePreview((old) => {
-      if (old) URL.revokeObjectURL(old);
-      return b ? URL.createObjectURL(b) : null;
-    });
-  }
-
-  async function startRec() {
-    setError(null);
-    setVoiceBlob(null);
-    try {
-      recorder.current = await startRecording();
-      setRecSeconds(0);
-      setRecording(true);
-    } catch {
-      setError(t.micDenied);
-    }
-  }
-
-  async function stopRec() {
-    const r = recorder.current;
-    recorder.current = null;
-    setRecording(false);
-    if (!r) return;
-    await acceptSample(await r.stop());
-  }
-
-  async function acceptSample(raw: Blob) {
-    try {
-      const { wav, seconds } = await toWav(raw);
-      if (seconds < MIN_SECONDS) {
-        setError(t.tooShort);
-        return;
-      }
-      setError(null);
-      setVoiceBlob(wav);
-    } catch {
-      setError(t.error);
-    }
+  function goVideo() {
+    persist({ occasion: occasion || undefined, toName, toEmail, fromName, lang, choice: null, photoUrl });
+    window.location.href = `/video?lang=${lang}`;
   }
 
   async function onPhoto(file: File | undefined) {
     if (!file) return;
-    setError(null);
+    setUploading(true); setError(null);
     try {
       const small = await shrinkPhoto(file);
-      setPhoto(small);
-      setPhotoPreview((old) => {
-        if (old) URL.revokeObjectURL(old);
-        return URL.createObjectURL(small);
-      });
-    } catch (e) {
-      setError((e as Error).message);
-    }
+      const form = new FormData();
+      form.append("photo", small, "photo.jpg");
+      const res = await fetch("/api/photo", { method: "POST", body: form });
+      const d = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !d.url) throw new Error(d.error || t.error);
+      setPhoto(await loadImage(d.url));
+      setPhotoUrl(d.url);
+    } catch (e) { setError((e as Error).message); }
+    finally { setUploading(false); }
   }
 
-  async function generate() {
-    const hasVoice = voiceMode === "preset" || !!voice;
-    if (!photo || !hasVoice || !consent) return;
-    player.current?.pause();
-    setError(null);
-    setNotice(null);
-    setPhase("upload");
-    setStep("working");
-    const form = new FormData();
-    form.append("photo", photo, "selfie.jpg");
-    if (voiceMode === "preset") form.append("presetVoice", presetVoice);
-    else if (voice) form.append("voice", voice, "sample.wav");
-    form.append("lang", lang);
-    form.append("occasion", occasion);
-    form.append("message", message.trim());
-    form.append("scene", scene.trim());
-    form.append("consent", "yes");
-    const cloneTimer = setTimeout(() => setPhase("clone"), 2500);
+  async function pay() {
+    if (!choice || !occasion) return;
+    setBusy(true); setError(null);
     try {
-      const res = await fetch("/api/create", { method: "POST", body: form });
-      const data = (await res.json().catch(() => ({}))) as { requestId?: string; error?: string };
-      if (!res.ok || !data.requestId) throw new Error(data.error || t.error);
-      setRequestId(data.requestId);
-      setPhase("queue");
-    } catch (e) {
-      setError((e as Error).message);
-      setStep("capture");
-    } finally {
-      clearTimeout(cloneTimer);
-    }
+      const names = { to: toName.trim(), from: fromName.trim() };
+      const image = choice.kind === "quick"
+        ? await cardJpeg({ artKey: choice.id, lang, to: names.to, from: names.from, fontFamily: CARD_FONT_FAMILY, photo })
+        : await posterJpeg(choice.id, Math.max(POSTER_T[choice.id], 5.4), { lang, to: names.to, from: names.from, fontFamily: CARD_FONT_FAMILY, photo, text: actionTextFor(choice.id, occasion, lang) });
+      const form = new FormData();
+      Object.entries({ kind: choice.kind, cardId: choice.id, occasion, lang, toName: names.to, toEmail: toEmail.trim(), fromName: names.from, photoUrl: photoUrl || "" }).forEach(([k, v]) => form.append(k, v));
+      form.append("image", image, "card.jpg");
+      const res = await fetch("/api/order", { method: "POST", body: form });
+      const d = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !d.url) throw new Error(d.error || t.error);
+      window.location.href = d.url;
+    } catch (e) { setError((e as Error).message || t.error); setBusy(false); }
   }
 
-  async function checkout() {
-    if (!requestId) return;
-    setBusy(true);
-    setError(null);
+  async function deliver() {
+    const o = order.current;
+    if (!o) return;
+    setDelivery({ state: "checking" });
     try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!data.url) throw new Error(data.error || t.error);
-      window.location.href = data.url;
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
+      const res = await fetch("/api/deliver", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: o.id, sessionId: o.sessionId }) });
+      const d = (await res.json()) as { paid?: boolean; sent?: boolean; toName?: string; toEmail?: string; link?: string; error?: string };
+      if (res.status === 402 || d.paid === false) return setDelivery({ state: "unpaid" });
+      if (!res.ok) throw new Error(d.error || "error");
+      setDelivery({ state: d.sent ? "sent" : "failed", toName: d.toName, toEmail: d.toEmail, link: d.link, error: d.error });
+      if (d.sent) try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* ignore */ }
+    } catch (e) { setDelivery({ state: "failed", error: (e as Error).message }); }
   }
 
   function startOver() {
-    setStep("occasion");
-    setRequestId(null);
-    setVideoUrl(null);
-    setSessionId(null);
-    setError(null);
-    setNotice(null);
-    setBusy(false);
+    try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* ignore */ }
+    window.history.replaceState(null, "", "/");
+    setOccasion(null); setToName(""); setToEmail(""); setChoice(null); setPhoto(null); setPhotoUrl(null); setDelivery(null);
+    go(1);
   }
 
-  const phaseText = { upload: t.sUpload, clone: t.sClone, queue: t.sQueue, render: t.sRender }[phase];
-  const canGenerate = !!photo && (voiceMode === "preset" || !!voice) && consent && !recording && message.trim().length > 0;
+  const names = OCCASION_NAMES[lang];
+  const stepIdx = step === "done" ? 4 : step;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-start p-4 sm:p-8 font-sans">
-      <header className="w-full max-w-2xl flex items-center justify-between gap-3 mb-8 pb-4 border-b border-slate-800">
-        <div className="flex items-center gap-2 min-w-0">
-          <Film className="w-8 h-8 shrink-0 text-pink-500" />
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-400 to-amber-300">
-            CINEGRAM
-          </h1>
-        </div>
-        <label className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-300">
-          <Globe className="w-4 h-4 text-purple-400" />
-          <span className="sr-only">Language</span>
-          <select
-            value={lang}
-            onChange={(e) => isLang(e.target.value) && setLang(e.target.value)}
-            disabled={step === "working"}
-            className="bg-transparent outline-none"
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code} className="bg-slate-900">
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </header>
-
-      <div className="w-full max-w-xl bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
-        {error && (
-          <p role="alert" className="mb-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p role="status" className="mb-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">
-            {notice}
-          </p>
+    <main className="page font-sans">
+      <SiteHeader lang={lang} setLang={setLang} active="send" />
+      <div ref={top} className="w-full max-w-5xl scroll-mt-4">
+        {step !== "done" && (
+          <>
+            {step === 1 && (
+              <section className="mb-8 text-center">
+                <h1 className="title-serif text-4xl sm:text-6xl font-semibold leading-tight text-amber-50">{t.heroTitle}</h1>
+                <p className="mx-auto mt-3 max-w-xl text-sm sm:text-base text-white/65">{t.heroSub}</p>
+              </section>
+            )}
+            <Stepper labels={t.steps} current={stepIdx} onJump={(n) => n < stepIdx && go(n as Step)} />
+          </>
         )}
 
-        {step === "lang" && (
-          <div className="space-y-6 text-center">
-            <p className="text-sm font-semibold text-pink-300">{t.tagline}</p>
-            <h2 className="text-2xl font-black">{t.chooseLanguage}</h2>
-            <p className="text-slate-400 text-sm">{t.chooseLanguageSub}</p>
-            <div className="grid grid-cols-2 gap-3">
-              {LANGUAGES.map((l) => (
-                <button
-                  key={l.code}
-                  onClick={() => { setLang(l.code); setStep("occasion"); }}
-                  className="p-4 bg-slate-800 hover:bg-gradient-to-r hover:from-purple-600 hover:to-pink-600 rounded-2xl font-bold text-base transition border border-slate-700/50"
-                >
-                  {l.label}
+        {error && <p role="alert" className="alert mx-auto mb-5 max-w-xl">{error}</p>}
+        {notice && <p role="status" className="notice mx-auto mb-5 max-w-xl">{notice}</p>}
+
+        {/* ---------- 1. Occasion ---------- */}
+        {step === 1 && (
+          <section>
+            <h2 className="mb-5 text-center text-xl sm:text-2xl font-bold">{t.s1Title}</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 sm:gap-4">
+              {CARD_OCCASIONS.map((o) => (
+                <button key={o} onClick={() => { setOccasion(o); setChoice(null); go(2); }} className={`tile group ${occasion === o ? "tile-selected" : ""}`}>
+                  <div className="aspect-[4/3] overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/api/card-art/${OCCASION_COVER[o]}`} alt="" loading="lazy" className="h-full w-full object-cover object-top transition duration-500 group-hover:scale-105" />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 px-3 py-3">
+                    <span className="text-sm sm:text-base font-bold"><span aria-hidden>{OCCASION_EMOJI[o]}</span> {names[o]}</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-white/40" />
+                  </div>
                 </button>
               ))}
             </div>
-            <a
-              href={`/cards?lang=${lang}`}
-              className="block w-full rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/20 transition"
-            >
-              {CARDS_PROMO[lang]}
-            </a>
-            <a
-              href={`/action?lang=${lang}`}
-              className="block w-full rounded-2xl border border-pink-400/30 bg-pink-400/10 px-4 py-3 text-sm font-semibold text-pink-100 hover:bg-pink-400/20 transition"
-            >
-              {ACTION_PROMO[lang]}
-            </a>
-          </div>
+          </section>
         )}
 
-        {step === "occasion" && (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black">{t.pickOccasion}</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {OCCASIONS.map(({ id, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => { setOccasion(id); setStep("write"); }}
-                  className="p-5 bg-slate-800 hover:bg-pink-600/30 hover:border-pink-500/50 rounded-2xl flex flex-col items-center gap-3 transition border border-slate-700/50 group"
-                >
-                  <Icon className="w-10 h-10 text-pink-400 group-hover:scale-110 transition" />
-                  <span className="font-bold text-sm">{t.occ[id]}</span>
-                </button>
-              ))}
+        {/* ---------- 2. Who it's for ---------- */}
+        {step === 2 && occasion && (
+          <section className="panel mx-auto max-w-xl p-6 sm:p-8">
+            <p className="chip mb-4"><span aria-hidden>{OCCASION_EMOJI[occasion]}</span> {names[occasion]}</p>
+            <h2 className="mb-6 text-2xl font-bold">{t.s2Title}</h2>
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); nextFromWho(); }}>
+              <label className="block"><span className="label">{t.toName}</span>
+                <input className="field" value={toName} onChange={(e) => setToName(e.target.value)} maxLength={60} placeholder={t.toNamePh} autoComplete="off" autoFocus />
+              </label>
+              <label className="block"><span className="label">{t.toEmail}</span>
+                <input className="field" type="email" inputMode="email" autoCapitalize="off" autoComplete="off" value={toEmail} onChange={(e) => setToEmail(e.target.value)} placeholder={t.toEmailPh} />
+              </label>
+              <label className="block"><span className="label">{t.fromName}</span>
+                <input className="field" value={fromName} onChange={(e) => setFromName(e.target.value)} maxLength={60} placeholder={t.fromNamePh} autoComplete="given-name" />
+              </label>
+              <button type="submit" className="btn-primary mt-2">{t.next} <ChevronRight className="h-5 w-5" /></button>
+            </form>
+            <button onClick={() => go(1)} className="btn-ghost mt-5"><ArrowLeft className="h-4 w-4" /> {t.back}</button>
+          </section>
+        )}
+
+        {/* ---------- 3. Choose a card ---------- */}
+        {step === 3 && occasion && (
+          <section className="space-y-10">
+            <div className="text-center">
+              <h2 className="title-serif text-3xl sm:text-4xl font-semibold text-amber-50">{t.s3Title(toName.trim())}</h2>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <button onClick={() => go(1)} className="chip hover:bg-white/10"><span aria-hidden>{OCCASION_EMOJI[occasion]}</span> {names[occasion]} · {t.change}</button>
+                <button onClick={() => go(2)} className="chip hover:bg-white/10"><Mail className="h-3.5 w-3.5" /> {toEmail} · {t.change}</button>
+              </div>
             </div>
-            <a
-              href={`/cards?lang=${lang}`}
-              className="block w-full rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-300/20 transition"
-            >
-              {CARDS_PROMO[lang]}
-            </a>
-            <a
-              href={`/action?lang=${lang}`}
-              className="block w-full rounded-2xl border border-pink-400/30 bg-pink-400/10 px-4 py-3 text-sm font-semibold text-pink-100 hover:bg-pink-400/20 transition"
-            >
-              {ACTION_PROMO[lang]}
-            </a>
-            <button onClick={() => setStep("lang")} className="text-xs text-slate-400 hover:text-white">{t.back}</button>
-          </div>
-        )}
 
-        {step === "write" && (
-          <div className="space-y-5">
-            <h2 className="text-2xl font-black text-center">{t.writeTitle}</h2>
-            <label className="block space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.recipient}</span>
-              <input
-                value={recipient}
-                maxLength={40}
-                placeholder={t.recipientPh}
-                onChange={(e) => setRecipient(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm focus:outline-none focus:border-pink-500"
-              />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.message}</span>
-              <textarea
-                rows={4}
-                value={message}
-                maxLength={MAX_MESSAGE}
-                onChange={(e) => { setMessage(e.target.value); setMessageEdited(true); }}
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm focus:outline-none focus:border-pink-500"
-              />
-              <span className="flex justify-between gap-3 text-xs text-slate-400">
-                <span>{t.messageHint}</span>
-                <span className="tabular-nums shrink-0">{message.length}/{MAX_MESSAGE}</span>
-              </span>
-            </label>
-            <label className="block space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.scene}</span>
-              <textarea
-                rows={2}
-                value={scene}
-                maxLength={300}
-                placeholder={t.scenePh}
-                onChange={(e) => setScene(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm focus:outline-none focus:border-pink-500"
-              />
-            </label>
-            <button disabled={!message.trim()} onClick={() => setStep("capture")} className={BTN_MAIN}>{t.next}</button>
-            <button onClick={() => setStep("occasion")} className="block mx-auto text-xs text-slate-400 hover:text-white">{t.back}</button>
-          </div>
-        )}
-
-        {step === "capture" && (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black">{t.faceTitle}</h2>
-
-            <label className="cursor-pointer border-2 border-dashed border-slate-700 hover:border-pink-500 rounded-2xl p-5 flex flex-col items-center justify-center bg-slate-950/50 transition">
-              {photoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoPreview} alt="" className="w-28 h-28 rounded-2xl object-cover mb-2" />
-              ) : (
-                <Upload className="w-8 h-8 text-pink-400 mb-2" />
-              )}
-              <span className="text-sm font-semibold">{t.photo}</span>
-              <span className="text-xs text-slate-400 mt-1">{t.photoTip}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => onPhoto(e.target.files?.[0])} />
-            </label>
-
-            <div className="space-y-3 text-left">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.voiceChoice}</p>
-              <div role="tablist" className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-950 border border-slate-800 p-1">
-                {(["mine", "preset"] as const).map((m) => (
-                  <button
-                    key={m}
-                    role="tab"
-                    aria-selected={voiceMode === m}
-                    onClick={() => chooseVoiceMode(m)}
-                    className={`py-2.5 rounded-xl text-sm font-bold transition ${voiceMode === m ? "bg-purple-600 text-white" : "text-slate-400 hover:text-white"}`}
-                  >
-                    {m === "mine" ? t.myVoice : t.pickVoice}
+            <div>
+              <SectionTitle icon={<Sparkles className="h-5 w-5 text-pink-300" />} title={t.actionTitle} sub={t.actionSub} />
+              <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-6 sm:overflow-visible sm:px-0">
+                {OCCASION_ACTIONS[occasion].map((id) => (
+                  <button key={id} onClick={() => pick({ kind: "action", id })} className="tile w-36 shrink-0 p-1.5 sm:w-auto">
+                    <ActionCanvas id={id} lang={lang} maxScale={0.45} label={ACTION_TEXT[lang][id].name} />
+                    <p className="truncate px-1 pb-1 pt-2 text-xs font-semibold text-white/85">{ACTION_TEXT[lang][id].name}</p>
                   </button>
                 ))}
               </div>
             </div>
 
-            {voiceMode === "preset" ? (
-              <div className="space-y-3 text-left">
-                <p className="text-xs text-slate-400">{t.pickTip}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {PRESET_VOICES.map((v) => {
-                    const chosen = presetVoice === v.id;
-                    return (
-                      <div
-                        key={v.id}
-                        className={`flex items-center gap-2 rounded-2xl border p-2 transition ${chosen ? "border-pink-500 bg-pink-600/15" : "border-slate-800 bg-slate-950"}`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => togglePreview(v.id)}
-                          disabled={!previews?.[v.id]}
-                          aria-label={`${t.voices[v.key]} ▶`}
-                          className="shrink-0 w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center disabled:opacity-30"
-                        >
-                          {playing === v.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPresetVoice(v.id)}
-                          aria-pressed={chosen}
-                          className="flex-1 min-w-0 text-left text-sm font-semibold leading-tight py-1"
-                        >
-                          {t.voices[v.key]}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-            <div className="space-y-3 text-left">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{t.voiceTip}</p>
-              <p className="rounded-2xl bg-slate-950 border border-slate-800 p-4 text-sm leading-relaxed">{t.script}</p>
-              {!recording ? (
-                <button
-                  onClick={startRec}
-                  className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition ${voice ? "bg-emerald-600" : "bg-purple-600 hover:bg-purple-500"}`}
-                >
-                  {voice ? <RotateCcw className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {voice ? `${t.voiceReady} · ${t.redo}` : t.record}
-                </button>
-              ) : (
-                <button onClick={stopRec} className="w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 bg-red-600 animate-pulse">
-                  <Square className="w-5 h-5" /> {t.recording} {recSeconds}s / {MAX_SECONDS}s · {t.stop}
-                </button>
-              )}
-              {voicePreview && !recording && <audio src={voicePreview} controls className="w-full" />}
-              <label className="block text-center text-xs text-slate-400 underline cursor-pointer">
-                {t.uploadVoice}
-                <input
-                  type="file"
-                  accept="audio/*"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) acceptSample(f); }}
-                />
-              </label>
-            </div>
-            )}
-
-            <label className="flex items-start gap-3 text-left text-sm text-slate-300">
-              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 w-4 h-4 accent-pink-500" />
-              <span>{voiceMode === "preset" ? t.consentFace : t.consent}</span>
-            </label>
-
-            <button
-              disabled={!canGenerate}
-              onClick={generate}
-              className="w-full py-4 bg-gradient-to-r from-amber-400 via-pink-500 to-purple-600 text-slate-950 font-black rounded-2xl text-lg disabled:opacity-50 hover:opacity-90 transition shadow-lg"
-            >
-              {t.generate}
+            <button onClick={goVideo} className="tile flex w-full items-center gap-4 p-4 sm:p-5">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-fuchsia-500 to-amber-400"><Video className="h-7 w-7" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-lg font-bold">{t.videoTitle}</span>
+                <span className="block text-sm text-white/60">{t.videoSub}</span>
+              </span>
+              <span className="hidden sm:inline-flex chip">{t.videoCta}</span>
+              <ChevronRight className="h-5 w-5 text-white/40" />
             </button>
-            <button onClick={() => setStep("write")} className="text-xs text-slate-400 hover:text-white">{t.back}</button>
-          </div>
-        )}
 
-        {step === "working" && (
-          <div className="space-y-5 text-center py-6" role="status" aria-live="polite">
-            <Loader2 className="w-12 h-12 mx-auto text-pink-400 animate-spin" />
-            <p className="text-lg font-bold">{phaseText}</p>
-            <p className="text-sm text-slate-400">{t.keepOpen}</p>
-          </div>
-        )}
-
-        {step === "checking" && (
-          <div className="space-y-5 text-center py-6" role="status">
-            <Loader2 className="w-12 h-12 mx-auto text-emerald-400 animate-spin" />
-            <p className="text-lg font-bold">{t.checking}</p>
-          </div>
-        )}
-
-        {step === "preview" && videoUrl && (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black flex items-center justify-center gap-2">
-              <CheckCircle2 className="text-emerald-400 w-7 h-7" /> {t.readyTitle}
-            </h2>
-            <div className="relative overflow-hidden rounded-2xl border border-slate-800 shadow-2xl bg-black" onContextMenu={(e) => e.preventDefault()}>
-              <video
-                src={videoUrl}
-                controls
-                autoPlay
-                playsInline
-                controlsList="nodownload noplaybackrate"
-                disablePictureInPicture
-                className="w-full max-h-[70vh] object-contain"
-              />
-              <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="-rotate-12 text-2xl sm:text-3xl font-black tracking-widest text-white/35 select-none">{t.watermark}</span>
+            <div>
+              <SectionTitle icon={<span aria-hidden className="text-lg">🎨</span>} title={t.artTitle} sub={t.artSub} />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+                {cardsFor(occasion).map((c) => (
+                  <button key={c.id} onClick={() => pick({ kind: "quick", id: c.id })} className="tile p-1.5">
+                    <CardCanvas artKey={c.id} lang={lang} to={toName.trim()} from={fromName.trim()} maxScale={0.8} label={CARD_TEXT[lang][c.id].h} />
+                  </button>
+                ))}
               </div>
             </div>
-            <p className="text-xs text-slate-400">{t.previewNote}</p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={checkout}
-                disabled={busy}
-                className="w-full py-4 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black rounded-2xl text-base flex items-center justify-center gap-2 shadow-lg hover:opacity-90 transition disabled:opacity-60"
-              >
-                {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />} {t.buy}
-              </button>
-              <button onClick={startOver} className="text-xs text-slate-400 hover:text-white transition">{t.another}</button>
-            </div>
-          </div>
+            <button onClick={() => go(2)} className="btn-ghost"><ArrowLeft className="h-4 w-4" /> {t.back}</button>
+          </section>
         )}
 
-        {step === "paid" && videoUrl && sessionId && (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black flex items-center justify-center gap-2">
-              <CheckCircle2 className="text-emerald-400 w-7 h-7" /> {t.paidTitle}
-            </h2>
-            <div className="overflow-hidden rounded-2xl border border-slate-800 shadow-2xl bg-black">
-              <video src={videoUrl} controls autoPlay playsInline className="w-full max-h-[70vh] object-contain" />
+        {/* ---------- 4. Make it yours, pay & send ---------- */}
+        {step === 4 && occasion && choice && (
+          <section className="mx-auto grid max-w-4xl gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-start">
+            <div className="mx-auto w-full max-w-sm">
+              {choice.kind === "quick" && cardById(choice.id) ? (
+                <CardCanvas artKey={choice.id} lang={lang} to={toName.trim()} from={fromName.trim()} watermark={CARD_UI[lang].watermark} photo={photo} maxScale={2} label={CARD_TEXT[lang][choice.id].h} />
+              ) : choice.kind === "action" && isActionId(choice.id) ? (
+                <div className="relative">
+                  <ActionCanvas id={choice.id} lang={lang} to={toName.trim()} from={fromName.trim()} watermark={ACTION_UI[lang].watermark} photo={photo} text={actionTextFor(choice.id, occasion, lang)} playing maxScale={1} onCycle={() => music.start(choice.id as ActionId)} label={ACTION_TEXT[lang][choice.id].name} />
+                  <button onClick={() => { music.unlock(); music.setMuted(!music.muted); }} aria-label={music.muted ? ACTION_UI[lang].soundOn : ACTION_UI[lang].soundOff} className="absolute right-3 top-3 rounded-full bg-black/45 p-2.5 backdrop-blur hover:bg-black/60">
+                    {music.muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                  </button>
+                </div>
+              ) : null}
+              <p className="mt-3 text-center text-xs text-white/50">{t.previewNote}</p>
             </div>
-            <div className="flex flex-col gap-3">
-              <a
-                href={`/api/download?session_id=${encodeURIComponent(sessionId)}`}
-                className="w-full py-4 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black rounded-2xl text-base flex items-center justify-center gap-2 shadow-lg hover:opacity-90 transition"
-              >
-                <Download className="w-5 h-5" /> {t.download}
-              </a>
-              <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-slate-300 underline">{t.openVideo}</a>
-              <button onClick={startOver} className="text-xs text-slate-400 hover:text-white transition">{t.another}</button>
+
+            <div className="panel p-6 sm:p-7 space-y-5">
+              <div>
+                <h2 className="text-2xl font-bold">{t.personalize}</h2>
+                <p className="mt-1 text-sm text-white/60">{choice.kind === "action" ? `${ACTION_TEXT[lang][choice.id as ActionId].name} · ${t.actionTitle}` : `${CARD_TEXT[lang][choice.id].h} · ${t.artTitle}`}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block"><span className="label">{t.toName}</span><input className="field" value={toName} maxLength={60} onChange={(e) => setToName(e.target.value)} /></label>
+                <label className="block"><span className="label">{t.fromName}</span><input className="field" value={fromName} maxLength={60} onChange={(e) => setFromName(e.target.value)} /></label>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className={`btn-secondary w-auto cursor-pointer ${uploading ? "pointer-events-none opacity-60" : ""}`}>
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  {uploading ? t.uploading : photo ? t.changePhoto : t.addPhoto}
+                  <input type="file" accept="image/*" className="sr-only" onChange={(e) => { void onPhoto(e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
+                {photo && <button onClick={() => { setPhoto(null); setPhotoUrl(null); }} className="btn-ghost"><Trash2 className="h-4 w-4" /> {t.removePhoto}</button>}
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+                <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-pink-300" /> {t.willEmail(toEmail.trim())}</p>
+              </div>
+
+              <button onClick={pay} disabled={busy || uploading || !toName.trim() || !fromName.trim()} className="btn-primary">
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />} {t.pay(priceLabel(PRICE[choice.kind]), toName.trim() || "…")}
+              </button>
+              <p className="text-center text-xs text-white/40">{t.secure}</p>
+              <button onClick={() => go(3)} className="btn-ghost"><ArrowLeft className="h-4 w-4" /> {t.back}</button>
             </div>
-          </div>
+          </section>
+        )}
+
+        {/* ---------- Done ---------- */}
+        {step === "done" && (
+          <section className="panel mx-auto max-w-lg p-8 text-center">
+            {(!delivery || delivery.state === "checking") && (
+              <div className="space-y-4 py-6"><Loader2 className="mx-auto h-10 w-10 animate-spin text-pink-300" /><p className="text-lg font-bold">{t.sending}</p></div>
+            )}
+            {delivery?.state === "sent" && (
+              <div className="space-y-5">
+                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-pink-500 to-amber-400 text-4xl shadow-xl shadow-pink-500/30">💌</div>
+                <h2 className="title-serif text-4xl font-semibold text-amber-50">{t.sentTitle(delivery.toName || "")}</h2>
+                <p className="text-white/70">{t.sentBody(delivery.toEmail || "")}</p>
+                {delivery.link && <a href={delivery.link} target="_blank" rel="noopener noreferrer" className="btn-secondary"><CheckCircle2 className="h-5 w-5" /> {t.viewCard}</a>}
+                <button onClick={startOver} className="btn-primary"><RotateCcw className="h-5 w-5" /> {t.another}</button>
+              </div>
+            )}
+            {delivery?.state === "failed" && (
+              <div className="space-y-4">
+                <p className="text-lg font-bold">{t.notSent}</p>
+                {delivery.error && <p className="alert">{delivery.error}</p>}
+                <button onClick={deliver} className="btn-primary"><RotateCcw className="h-5 w-5" /> {t.retry}</button>
+                {delivery.link && <a href={delivery.link} target="_blank" rel="noopener noreferrer" className="btn-secondary">{t.viewCard}</a>}
+              </div>
+            )}
+            {delivery?.state === "unpaid" && (
+              <div className="space-y-4">
+                <p className="alert">{CARD_UI[lang].notPaid}</p>
+                <button onClick={() => { window.history.replaceState(null, "", "/"); go(4); }} className="btn-secondary">{t.back}</button>
+              </div>
+            )}
+          </section>
         )}
       </div>
     </main>
+  );
+}
+
+function Stepper({ labels, current, onJump }: { labels: [string, string, string]; current: number; onJump: (n: number) => void }) {
+  return (
+    <ol className="mx-auto mb-8 flex max-w-xl items-center justify-center gap-2 sm:gap-3">
+      {labels.map((label, i) => {
+        const n = i + 1, done = current > n, on = current === n || (current === 4 && n === 3);
+        return (
+          <li key={label} className="flex items-center gap-2 sm:gap-3">
+            <button onClick={() => onJump(n)} disabled={!done} className={`flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-sm font-semibold transition ${on ? "bg-white text-slate-900" : done ? "bg-white/10 text-white hover:bg-white/15" : "bg-white/5 text-white/40"}`}>
+              <span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${on ? "bg-gradient-to-br from-pink-500 to-purple-600 text-white" : done ? "bg-emerald-400 text-slate-900" : "bg-white/10"}`}>{done ? <Check className="h-3.5 w-3.5" /> : n}</span>
+              <span className="hidden min-[400px]:inline">{label}</span>
+            </button>
+            {n < 3 && <span className="h-px w-4 sm:w-8 bg-white/15" aria-hidden />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function SectionTitle({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
+  return (
+    <div className="mb-4 flex items-end justify-between gap-3">
+      <div>
+        <h3 className="flex items-center gap-2 text-xl font-bold">{icon} {title}</h3>
+        <p className="text-sm text-white/55">{sub}</p>
+      </div>
+    </div>
   );
 }

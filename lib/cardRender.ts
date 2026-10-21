@@ -4,6 +4,7 @@
 import { cardArtSvg } from "./cardArt";
 import { CARD_TEXT, CARD_UI } from "./cardsCatalog";
 import type { Lang } from "./i18n";
+import { polaroid } from "./polaroid";
 
 export const CARD_W = 500;
 export const CARD_H = 700;
@@ -76,6 +77,8 @@ export type DrawOptions = {
   scale: number;
   /** CSS font-family list for the greeting. */
   fontFamily: string;
+  /** Optional photo, shown as a polaroid on the artwork. */
+  photo?: HTMLImageElement | null;
 };
 
 export async function drawCard(canvas: HTMLCanvasElement, o: DrawOptions): Promise<void> {
@@ -102,6 +105,7 @@ export async function drawCard(canvas: HTMLCanvasElement, o: DrawOptions): Promi
   ctx.setTransform(o.scale, 0, 0, o.scale, 0, 0);
   ctx.clearRect(0, 0, CARD_W, CARD_H);
   ctx.drawImage(img, 0, 0, CARD_W, CARD_H);
+  if (o.photo) polaroid(ctx, o.photo, 318, 236, 150, 0.09);
 
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
@@ -176,4 +180,13 @@ export async function cardPng(o: Omit<DrawOptions, "scale" | "watermark">, fileN
   const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
   if (!blob) throw new Error("Could not create the image.");
   return new File([blob], fileName, { type: "image/png" });
+}
+
+/** Renders the card as a JPEG (smaller, used for the email preview). */
+export async function cardJpeg(o: Omit<DrawOptions, "scale" | "watermark">, scale = 1.6): Promise<Blob> {
+  const c = document.createElement("canvas");
+  await drawCard(c, { ...o, scale });
+  const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.86));
+  if (!blob) throw new Error("Could not create the image.");
+  return blob;
 }

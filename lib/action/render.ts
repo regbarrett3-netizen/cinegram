@@ -5,6 +5,7 @@ import { SCENES2 } from "./scenes2";
 import { ACTION_TEXT, type ActionId } from "./catalog";
 import { CARD_UI } from "../cardsCatalog";
 import type { Lang } from "../i18n";
+import { polaroid } from "../polaroid";
 
 const FACTORIES: Record<ActionId, () => Scene> = { ...SCENES1, ...SCENES2 };
 const cache = new Map<ActionId, Scene>();
@@ -21,7 +22,13 @@ export function scene(id: ActionId): Scene {
 export const TEXT_IN = 3.3;
 export const VIDEO_LEN = DUR + 0.8;
 
-export type FrameOpts = { lang: Lang; to?: string; from?: string; watermark?: string; fontFamily: string };
+export type FrameOpts = {
+  lang: Lang; to?: string; from?: string; watermark?: string; fontFamily: string;
+  /** Optional photo, shown as a polaroid when the greeting appears. */
+  photo?: HTMLImageElement | null;
+  /** Replaces the card's own headline and message (used for other occasions). */
+  text?: { h: string; m: string };
+};
 
 const isCjk = (l: Lang) => l === "zh" || l === "yue";
 
@@ -53,7 +60,7 @@ export function drawFrame(c: Ctx, id: ActionId, t: number, o: FrameOpts) {
 
   const a = ease.out(seg(t, TEXT_IN, TEXT_IN + 1));
   if (a > 0) {
-    const txt = ACTION_TEXT[o.lang][id] || ACTION_TEXT.en[id];
+    const txt = o.text || ACTION_TEXT[o.lang][id] || ACTION_TEXT.en[id];
     const ui = CARD_UI[o.lang];
     const cjk = isCjk(o.lang);
     const g = c.createLinearGradient(0, H * 0.6, 0, H);
@@ -62,6 +69,7 @@ export function drawFrame(c: Ctx, id: ActionId, t: number, o: FrameOpts) {
     g.addColorStop(1, `rgba(${s.scrim},${0.92 * a})`);
     c.fillStyle = g;
     c.fillRect(0, H * 0.6, W, H * 0.4);
+    if (o.photo) polaroid(c, o.photo, 470, 70 + (1 - a) * 30, 200, 0.08, a);
 
     c.save();
     c.globalAlpha = a;
@@ -121,7 +129,7 @@ export function prep(canvas: HTMLCanvasElement, scale: number): Ctx {
 }
 
 export async function loadFonts(id: ActionId, o: FrameOpts) {
-  const txt = ACTION_TEXT[o.lang][id];
+  const txt = o.text || ACTION_TEXT[o.lang][id];
   try {
     await Promise.all([document.fonts.load(`600 68px ${o.fontFamily}`, txt.h), document.fonts.load(`italic 500 34px ${o.fontFamily}`, txt.m)]);
   } catch {
@@ -206,4 +214,14 @@ export async function recordVideo(id: ActionId, o: FrameOpts, onProgress: (pct: 
   } finally {
     canvas.remove();
   }
+}
+
+/** A still frame of the card as a JPEG (used for the email preview). */
+export async function posterJpeg(id: ActionId, t: number, o: FrameOpts, scale = 0.6): Promise<Blob> {
+  await loadFonts(id, o);
+  const canvas = document.createElement("canvas");
+  drawFrame(prep(canvas, scale), id, t, o);
+  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.86));
+  if (!blob) throw new Error("Could not create the image.");
+  return blob;
 }

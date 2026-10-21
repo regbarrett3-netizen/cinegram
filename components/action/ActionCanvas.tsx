@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { POSTER_T, type ActionId } from "../../lib/action/catalog";
-import { VIDEO_LEN, drawFrame, loadFonts, prep } from "../../lib/action/render";
+import { VIDEO_LEN, drawFrame, loadFonts, prep, type FrameOpts } from "../../lib/action/render";
 import { W } from "../../lib/action/engine";
 import { CARD_FONT_FAMILY } from "../../lib/cardFont";
 import type { Lang } from "../../lib/i18n";
@@ -20,16 +20,18 @@ type Props = {
   label?: string;
   /** Called each time the playing animation starts over (used to restart the music). */
   onCycle?: () => void;
+  photo?: HTMLImageElement | null;
+  text?: { h: string; m: string };
 };
 
 /** An action card drawn live, exactly as it will appear in the video. */
-export function ActionCanvas({ id, lang, to, from, watermark, playing = false, maxScale = 1, className = "", label, onCycle }: Props) {
+export function ActionCanvas({ id, lang, to, from, watermark, playing = false, maxScale = 1, className = "", label, onCycle, photo, text }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
   const [ready, setReady] = useState(false);
   // Latest text options, read by the animation loop without restarting it.
-  const opts = useRef({ lang, to, from, watermark, fontFamily: CARD_FONT_FAMILY });
-  opts.current = { lang, to, from, watermark, fontFamily: CARD_FONT_FAMILY };
+  const opts = useRef<FrameOpts>({ lang, to, from, watermark, fontFamily: CARD_FONT_FAMILY, photo, text });
+  opts.current = { lang, to, from, watermark, fontFamily: CARD_FONT_FAMILY, photo, text };
   const cycleRef = useRef(onCycle);
   cycleRef.current = onCycle;
 
@@ -75,7 +77,7 @@ export function ActionCanvas({ id, lang, to, from, watermark, playing = false, m
       cancelAnimationFrame(raf);
     };
     // Still frames redraw when the names change; the playing loop picks them up itself.
-  }, [id, visible, playing, maxScale, playing ? "" : `${lang}|${to}|${from}|${watermark}`]);
+  }, [id, visible, playing, maxScale, playing ? "" : `${lang}|${to}|${from}|${watermark}|${text?.h}`, playing ? null : photo]);
 
   return <canvas ref={ref} role="img" aria-label={label} className={`block w-full aspect-[9/16] rounded-2xl shadow-2xl ${ready ? "" : "animate-pulse bg-slate-800"} ${className}`} />;
 }

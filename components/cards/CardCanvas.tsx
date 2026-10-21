@@ -15,10 +15,11 @@ type Props = {
   maxScale?: number;
   className?: string;
   label?: string;
+  photo?: HTMLImageElement | null;
 };
 
 /** A card drawn exactly as it will download, sized to fit its container. */
-export function CardCanvas({ artKey, lang, to, from, watermark, maxScale = 2, className = "", label }: Props) {
+export function CardCanvas({ artKey, lang, to, from, watermark, maxScale = 2, className = "", label, photo }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -51,13 +52,13 @@ export function CardCanvas({ artKey, lang, to, from, watermark, maxScale = 2, cl
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const width = c.clientWidth || 300;
     const scale = Math.max(0.4, Math.min(maxScale, (width / 500) * dpr));
-    drawCard(c, { artKey, lang, to, from, watermark, scale, fontFamily: CARD_FONT_FAMILY })
+    drawCard(c, { artKey, lang, to, from, watermark, scale, fontFamily: CARD_FONT_FAMILY, photo })
       .then(() => !cancelled && setReady(true))
       .catch((e) => console.error(e));
     return () => {
       cancelled = true;
     };
-  }, [artKey, lang, to, from, watermark, maxScale, visible]);
+  }, [artKey, lang, to, from, watermark, maxScale, visible, photo]);
 
   return (
     <canvas
