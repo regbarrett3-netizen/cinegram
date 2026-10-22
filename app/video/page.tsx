@@ -271,7 +271,9 @@ export default function VideoCardPage() {
 
   async function generate() {
     const hasVoice = voiceMode === "preset" || !!voice;
-    if (!photo || !hasVoice || !consent) return;
+    if (!photo) return setError(vf.needPhoto);
+    if (!hasVoice) return setError(vf.needVoice);
+    if (!consent) return setError(vf.needConsent);
     player.current?.pause();
     setError(null); setNotice(null);
     setPhase("upload");
@@ -500,7 +502,7 @@ export default function VideoCardPage() {
               <span>{voiceMode === "preset" ? t.consentFace : t.consent}</span>
             </label>
 
-            <button disabled={!canGenerate} onClick={generate} className="btn-primary">{vf.make}</button>
+            <button disabled={recording} onClick={generate} className={`btn-primary ${canGenerate ? "" : "opacity-80"}`}>{vf.make}</button>
             <button onClick={() => go(1)} className="btn-ghost">{st.back}</button>
           </div>
         )}
