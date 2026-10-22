@@ -17,7 +17,7 @@ import { loadImage } from "../lib/polaroid";
 import { FINAL_SALE, OCCASION_ACTIONS, PRICE, WIZARD_KEY, actionTextFor, priceLabel, type WizardState } from "../lib/send";
 import { SITE } from "../lib/siteText";
 import { isEmail } from "../lib/emailCheck";
-import { TEXT_UI, isPhone, smsHref, type DeliverBy } from "../lib/textSend";
+import { TEXT_UI, isPhone, shareLinks, smsHref, type DeliverBy } from "../lib/textSend";
 
 type Step = 1 | 2 | 3 | 4 | "done";
 type Choice = { kind: "quick"; id: string } | { kind: "action"; id: ActionId };
@@ -87,7 +87,7 @@ export default function SendFlow() {
   function nextFromWho() {
     if (!toName.trim() || !fromName.trim()) return setError(t.namesNeeded);
     if (deliverBy === "email" && !isEmail(toEmail.trim())) return setError(t.emailInvalid);
-    if (deliverBy === "text" && !isPhone(toPhone)) return setError(tx.phoneInvalid);
+    if (deliverBy === "text" && toPhone.trim() && !isPhone(toPhone)) return setError(tx.phoneInvalid);
     go(3);
   }
 
@@ -351,9 +351,20 @@ export default function SendFlow() {
                 <h2 className="title-serif text-4xl font-semibold text-amber-50">{tx.readyTitle(delivery.toName || "")}</h2>
                 <p className="text-white/70">{tx.readyBody}</p>
                 <a href={smsHref(delivery.toPhone || "", tx.smsBody(delivery.fromName || "", delivery.link))} className="btn-primary"><MessageSquare className="h-5 w-5" /> {tx.textIt(delivery.toName || "")}</a>
-                {typeof navigator !== "undefined" && "share" in navigator && (
-                  <button onClick={() => { navigator.share({ text: tx.smsBody(delivery.fromName || "", delivery.link || ""), url: delivery.link }).catch(() => undefined); }} className="btn-secondary"><Share2 className="h-5 w-5" /> {tx.shareIt}</button>
-                )}
+                <div className="space-y-2 pt-1">
+                  <p className="text-sm text-white/60">{tx.socialLabel}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <a href={shareLinks.whatsapp(tx.smsBody(delivery.fromName || "", delivery.link))} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full text-sm">{tx.whatsapp}</a>
+                    <a href={shareLinks.facebook(delivery.link)} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full text-sm">{tx.postFacebook}</a>
+                    <a href={shareLinks.x(tx.postText(delivery.toName || ""), delivery.link)} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full text-sm">{tx.postX}</a>
+                    <button onClick={() => {
+                      const text = tx.smsBody(delivery.fromName || "", delivery.link || "");
+                      if (typeof navigator !== "undefined" && "share" in navigator) navigator.share({ text, url: delivery.link }).catch(() => undefined);
+                      else navigator.clipboard?.writeText(delivery.link || "").then(() => setNotice(tx.instagramHint)).catch(() => undefined);
+                    }} className="btn-secondary w-full text-sm"><Share2 className="h-4 w-4" /> {tx.instagram}</button>
+                  </div>
+                  {notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
+                </div>
                 <button onClick={() => { navigator.clipboard?.writeText(delivery.link || "").then(() => setCopied(true)).catch(() => undefined); }} className="btn-ghost"><Copy className="h-4 w-4" /> {copied ? tx.copied : tx.copyLink}</button>
                 <a href={delivery.link} target="_blank" rel="noopener noreferrer" className="btn-ghost"><CheckCircle2 className="h-4 w-4" /> {t.viewCard}</a>
                 <button onClick={startOver} className="btn-ghost"><RotateCcw className="h-4 w-4" /> {t.another}</button>

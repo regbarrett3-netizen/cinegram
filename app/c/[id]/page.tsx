@@ -12,7 +12,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return {
     title,
     robots: { index: false, follow: false },
-    openGraph: row?.paid_at && row.image_url ? { title, images: [row.image_url] } : { title },
+    description: "Open your card on Cinegram 💌",
+    openGraph: row?.paid_at && row.image_url ? { title, description: "Open your card on Cinegram 💌", images: [row.image_url] } : { title },
+    twitter: row?.paid_at && row.image_url ? { card: "summary_large_image", title, images: [row.image_url] } : { card: "summary", title },
   };
 }
 

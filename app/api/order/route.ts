@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (!isCardOccasion(occasion)) return NextResponse.json({ error: "Unknown occasion." }, { status: 400 });
     if (!toName || !fromName) return NextResponse.json({ error: "Please add both names." }, { status: 400 });
     if (deliverBy === "email" && !isEmail(toEmail)) return NextResponse.json({ error: "That email address doesn't look right." }, { status: 400 });
-    if (deliverBy === "text" && !isPhone(toPhone)) return NextResponse.json({ error: "That mobile number doesn't look right." }, { status: 400 });
+    if (deliverBy === "text" && toPhone && !isPhone(toPhone)) return NextResponse.json({ error: "That mobile number doesn't look right." }, { status: 400 });
     if (photoUrl && !isOurStorageUrl(photoUrl)) return NextResponse.json({ error: "Please add the photo again." }, { status: 400 });
 
     const id = newId();
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (image instanceof Blob && image.size > 0 && image.size < 3 * MB && image.type === "image/jpeg") imageUrl = await uploadPublic("cards", `${id}.jpg`, image, "image/jpeg");
 
     const cents = PRICE[kind];
-    await insertCard({ id, kind, card_id: cardId, occasion, lang: isLang(lang) ? lang : "en", to_name: toName, to_email: deliverBy === "email" ? toEmail : "", deliver_by: deliverBy, to_phone: deliverBy === "text" ? cleanPhone(toPhone) : null, from_name: fromName, photo_url: photoUrl, image_url: imageUrl, price_cents: cents });
+    await insertCard({ id, kind, card_id: cardId, occasion, lang: isLang(lang) ? lang : "en", to_name: toName, to_email: deliverBy === "email" ? toEmail : "", deliver_by: deliverBy, to_phone: deliverBy === "text" && toPhone ? cleanPhone(toPhone) : null, from_name: fromName, photo_url: photoUrl, image_url: imageUrl, price_cents: cents });
     const title = kind === "quick" ? CARD_TEXT.en[cardId].h : `${ACTION_TEXT.en[cardId as keyof typeof ACTION_TEXT.en].name} (animated)`;
     const session = await stripeCreateSendCheckout({ orderId: id, title, cents, appUrl: appUrl(req), toName });
     await updateCard(id, { stripe_session_id: session.id });
