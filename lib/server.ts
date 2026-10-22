@@ -157,7 +157,9 @@ export async function elevenDeleteVoice(voiceId: string): Promise<void> {
 
 /* ---------------- Stripe ---------------- */
 
-const stripeAuth = () => ({ Authorization: `Bearer ${need("STRIPE_SECRET_KEY")}` });
+// STRIPE_LIVE_SECRET_KEY wins when set (lets the live key sit beside an integration-managed sandbox key).
+const stripeKey = () => process.env.STRIPE_LIVE_SECRET_KEY || need("STRIPE_SECRET_KEY");
+const stripeAuth = () => ({ Authorization: `Bearer ${stripeKey()}` });
 
 export const PRICE_CENTS = 299;
 
