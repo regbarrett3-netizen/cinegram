@@ -30,4 +30,4 @@ jobs:
           git config user.name "e2e bot"; git config user.email "e2e@users.noreply.github.com"
           git checkout --orphan e2e-results
           git rm -rq --cached . && find . -mindepth 1 -maxdepth 1 ! -name e2e-out ! -name .git -exec rm -rf {} +
-          git add e2e-out && git commit -qm "e2e results $(date -u +%FT%TZ)" && git push -f origin e2e-results
+          echo '{ "git": { "deploymentEnabled": false } }' > vercel.json && git add e2e-out vercel.json && git commit -qm "e2e results $(date -u +%FT%TZ)" && git push -f origin e2e-results
