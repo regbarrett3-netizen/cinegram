@@ -18,6 +18,14 @@ const page = await ctx.newPage();
 const consoleErrors = [];
 page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text().slice(0, 300)); });
 page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${String(e).slice(0, 300)}`));
+const network = [];
+page.on("response", async (r) => {
+  const u = r.url();
+  if (r.status() >= 400) network.push(`${r.status()} ${u.slice(0, 160)}`);
+  if (u.includes("/api/status") || u.includes("/api/create")) {
+    try { network.push(`${r.status()} ${u.replace(/^.*\/api/, "/api").slice(0, 80)} -> ${(await r.text()).slice(0, 300)}`); } catch { /* ignore */ }
+  }
+});
 const shot = async (label) => { n++; await page.screenshot({ path: `${out}/${String(n).padStart(2, "0")}-${label}.png`, fullPage: false }); };
 const alertText = async () => (await page.locator('[role="alert"]').allInnerTexts()).join(" | ");
 
@@ -133,7 +141,7 @@ if (RUN_VIDEO) {
   } catch { /* recorded */ }
 }
 
-fs.writeFileSync(`${out}/results.json`, JSON.stringify({ base: BASE, results, consoleErrors: consoleErrors.slice(0, 40) }, null, 2));
+fs.writeFileSync(`${out}/results.json`, JSON.stringify({ base: BASE, results, consoleErrors: consoleErrors.slice(0, 40), network: network.slice(-60) }, null, 2));
 await browser.close();
 console.log(`\n${results.filter((r) => r.ok).length}/${results.length} checks passed`);
 process.exitCode = results.every((r) => r.ok) ? 0 : 1;
