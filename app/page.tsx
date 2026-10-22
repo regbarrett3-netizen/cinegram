@@ -359,7 +359,7 @@ export default function SendFlow() {
                     <a href={shareLinks.x(tx.postText(delivery.toName || ""), delivery.link)} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full text-sm">{tx.postX}</a>
                     <button onClick={() => {
                       const text = tx.smsBody(delivery.fromName || "", delivery.link || "");
-                      if (typeof navigator !== "undefined" && "share" in navigator) navigator.share({ text, url: delivery.link }).catch(() => undefined);
+                      if (typeof navigator.share === "function") navigator.share({ text, url: delivery.link }).catch(() => undefined);
                       else navigator.clipboard?.writeText(delivery.link || "").then(() => setNotice(tx.instagramHint)).catch(() => undefined);
                     }} className="btn-secondary w-full text-sm"><Share2 className="h-4 w-4" /> {tx.instagram}</button>
                   </div>
