@@ -65,6 +65,7 @@ export function CardCanvas({ artKey, lang, to, from, watermark, maxScale = 2, cl
       ref={ref}
       role="img"
       aria-label={label}
+      onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
       className={`block w-full aspect-[5/7] rounded-xl shadow-2xl ${ready ? "" : "animate-pulse bg-slate-800"} ${className}`}
     />
   );

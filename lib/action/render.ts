@@ -104,15 +104,26 @@ export function drawFrame(c: Ctx, id: ActionId, t: number, o: FrameOpts) {
 
   if (o.watermark) {
     c.save();
-    c.translate(360, 560);
+    // Tiled across the whole frame (no clean area to crop), with the site name between rows.
+    c.translate(360, 640);
     c.rotate(-Math.PI / 6);
-    c.font = `700 72px ${o.fontFamily}`;
     c.textAlign = "center";
-    c.globalAlpha = 0.3;
+    c.textBaseline = "middle";
     c.lineWidth = 3;
     c.strokeStyle = "#000";
     c.fillStyle = "#fff";
-    for (const dy of [-300, 0, 300]) { c.strokeText(o.watermark, 0, dy); c.fillText(o.watermark, 0, dy); }
+    for (let row = -9; row <= 9; row++) {
+      const big = row % 2 === 0;
+      c.font = big ? `700 60px ${o.fontFamily}` : `600 26px ${o.fontFamily}`;
+      c.globalAlpha = big ? 0.32 : 0.4;
+      const label = big ? o.watermark : "cinegramcards.com";
+      const step = big ? 380 : 320;
+      const shift = (row & 2 ? step / 2 : 0);
+      for (let x = -1200 + shift; x <= 1200; x += step) {
+        if (big) c.strokeText(label, x, row * 100);
+        c.fillText(label, x, row * 100);
+      }
+    }
     c.restore();
   }
 }

@@ -79,5 +79,5 @@ export function ActionCanvas({ id, lang, to, from, watermark, playing = false, m
     // Still frames redraw when the names change; the playing loop picks them up itself.
   }, [id, visible, playing, maxScale, playing ? "" : `${lang}|${to}|${from}|${watermark}|${text?.h}`, playing ? null : photo]);
 
-  return <canvas ref={ref} role="img" aria-label={label} className={`block w-full aspect-[9/16] rounded-2xl shadow-2xl ${ready ? "" : "animate-pulse bg-slate-800"} ${className}`} />;
+  return <canvas ref={ref} role="img" aria-label={label} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }} className={`block w-full aspect-[9/16] rounded-2xl shadow-2xl ${ready ? "" : "animate-pulse bg-slate-800"} ${className}`} />;
 }

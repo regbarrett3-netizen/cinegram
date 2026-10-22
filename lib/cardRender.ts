@@ -158,16 +158,25 @@ export async function drawCard(canvas: HTMLCanvasElement, o: DrawOptions): Promi
 
   if (o.watermark) {
     ctx.save();
-    ctx.translate(250, 330);
+    // Tiled across the whole card (no clean corner to crop), with the site name between rows.
+    ctx.translate(250, 350);
     ctx.rotate(-Math.PI / 6);
-    ctx.font = `700 46px ${fam}`;
-    ctx.globalAlpha = 0.28;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#000";
     ctx.fillStyle = "#fff";
-    for (const dy of [-180, 0, 180]) {
-      ctx.strokeText(o.watermark, 0, dy);
-      ctx.fillText(o.watermark, 0, dy);
+    for (let row = -5; row <= 5; row++) {
+      const big = row % 2 === 0;
+      ctx.font = big ? `700 40px ${fam}` : `600 18px ${fam}`;
+      ctx.globalAlpha = big ? 0.32 : 0.4;
+      const label = big ? o.watermark : "cinegramcards.com";
+      const step = big ? 260 : 220;
+      const shift = (row & 2 ? step / 2 : 0);
+      for (let x = -700 + shift; x <= 700; x += step) {
+        if (big) ctx.strokeText(label, x, row * 70);
+        ctx.fillText(label, x, row * 70);
+      }
     }
     ctx.restore();
   }
