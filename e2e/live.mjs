@@ -135,3 +135,4 @@ if (RUN_VIDEO) {
 fs.writeFileSync(`${out}/results.json`, JSON.stringify({ base: BASE, results, consoleErrors: consoleErrors.slice(0, 40) }, null, 2));
 await browser.close();
 console.log(`\n${results.filter((r) => r.ok).length}/${results.length} checks passed`);
+process.exitCode = results.every((r) => r.ok) ? 0 : 1;
