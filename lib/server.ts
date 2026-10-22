@@ -157,15 +157,34 @@ export async function elevenDeleteVoice(voiceId: string): Promise<void> {
 
 /* ---------------- Stripe ---------------- */
 
-// STRIPE_LIVE_SECRET_KEY wins when set (lets the live key sit beside an integration-managed sandbox key).
-// STRIKE_LIVE_SECRET_KEY: the name the live key was saved under in Vercel (phone autocorrect); accepted as-is.
-const looksLikeSecret = (k?: string) => !!k && /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(k.trim());
-/** Uses the live key only if it looks like a real secret key, so a bad paste can't break checkout. */
-const stripeKey = () => {
-  for (const k of [process.env.STRIPE_LIVE_SECRET_KEY, process.env.STRIKE_LIVE_SECRET_KEY]) if (looksLikeSecret(k)) return k!.trim();
-  return need("STRIPE_SECRET_KEY");
-};
-const stripeAuth = () => ({ Authorization: `Bearer ${stripeKey()}` });
+const LIVE_KEY_VARS = ["STRIPE_LIVE_SECRET_KEY", "STRIKE_LIVE_SECRET_KEY"] as const;
+let picked: { key: string; source: string; at: number } | null = null;
+
+/** Asks Stripe whether a key works, without creating anything. */
+export async function stripeAccepts(key: string): Promise<{ ok: boolean; status: number; livemode?: boolean; error?: string }> {
+  try {
+    const res = await fetch("https://api.stripe.com/v1/checkout/sessions?limit=1", { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" });
+    const body = (await res.json().catch(() => ({}))) as { data?: { livemode?: boolean }[]; error?: { code?: string; type?: string } };
+    return { ok: res.ok, status: res.status, livemode: body.data?.[0]?.livemode, error: body.error?.code || body.error?.type };
+  } catch (e) {
+    return { ok: false, status: 0, error: (e as Error).message };
+  }
+}
+
+/**
+ * Uses the live key only if Stripe actually accepts it; otherwise falls back to STRIPE_SECRET_KEY,
+ * so a bad paste can never break checkout. The choice is re-checked every 10 minutes.
+ */
+export async function stripeKeyChoice(): Promise<{ key: string; source: string }> {
+  if (picked && Date.now() - picked.at < 10 * 60 * 1000) return picked;
+  for (const name of LIVE_KEY_VARS) {
+    const k = process.env[name]?.trim().replace(/^["']|["']$/g, "");
+    if (k && (await stripeAccepts(k)).ok) { picked = { key: k, source: name, at: Date.now() }; return picked; }
+  }
+  picked = { key: need("STRIPE_SECRET_KEY"), source: "STRIPE_SECRET_KEY", at: Date.now() };
+  return picked;
+}
+const stripeAuth = async () => ({ Authorization: `Bearer ${(await stripeKeyChoice()).key}` });
 
 export const PRICE_CENTS = 299;
 
@@ -187,7 +206,7 @@ export async function stripeCreateCheckout(requestId: string, appUrl: string, to
   });
   const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
-    headers: { ...stripeAuth(), "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { ...(await stripeAuth()), "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
   if (!res.ok) await failText(res, "Checkout");
@@ -199,7 +218,7 @@ export async function stripeCreateCheckout(requestId: string, appUrl: string, to
 export async function stripePaidRequestId(sessionId: string): Promise<string | null> {
   if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return null;
   const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
-    headers: stripeAuth(),
+    headers: await stripeAuth(),
     cache: "no-store",
   });
   if (!res.ok) return null;
@@ -233,7 +252,7 @@ export async function stripeCreateCardCheckout(o: {
   });
   const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
-    headers: { ...stripeAuth(), "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { ...(await stripeAuth()), "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
   if (!res.ok) await failText(res, "Checkout");
@@ -245,7 +264,7 @@ export async function stripeCreateCardCheckout(o: {
 export async function stripePaidCardId(sessionId: string): Promise<string | null> {
   if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return null;
   const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
-    headers: stripeAuth(),
+    headers: await stripeAuth(),
     cache: "no-store",
   });
   if (!res.ok) return null;
@@ -273,7 +292,7 @@ export async function stripeCreateActionCheckout(o: { actionId: string; title: s
   });
   const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
-    headers: { ...stripeAuth(), "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { ...(await stripeAuth()), "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
   if (!res.ok) await failText(res, "Checkout");
@@ -284,7 +303,7 @@ export async function stripeCreateActionCheckout(o: { actionId: string; title: s
 /** Returns the paid action card's id, or null if the session isn't a paid action-card purchase. */
 export async function stripePaidActionId(sessionId: string): Promise<string | null> {
   if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return null;
-  const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, { headers: stripeAuth(), cache: "no-store" });
+  const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, { headers: await stripeAuth(), cache: "no-store" });
   if (!res.ok) return null;
   const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; action_id?: string } };
   if (s.payment_status !== "paid" || s.metadata?.kind !== "action") return null;
@@ -308,7 +327,7 @@ export async function stripeCreateSendCheckout(o: { orderId: string; title: stri
     success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${back}&status=cancelled`,
   });
-  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { ...stripeAuth(), "Content-Type": "application/x-www-form-urlencoded" }, body });
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", { method: "POST", headers: { ...(await stripeAuth()), "Content-Type": "application/x-www-form-urlencoded" }, body });
   if (!res.ok) await failText(res, "Checkout");
   const data = (await res.json()) as { url: string; id: string };
   return { url: data.url, id: data.id };
@@ -317,7 +336,7 @@ export async function stripeCreateSendCheckout(o: { orderId: string; title: stri
 /** True only when the session is paid and belongs to this order. */
 export async function stripeSendPaid(sessionId: string, orderId: string): Promise<boolean> {
   if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return false;
-  const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, { headers: stripeAuth(), cache: "no-store" });
+  const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, { headers: await stripeAuth(), cache: "no-store" });
   if (!res.ok) return false;
   const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; order_id?: string } };
   return s.payment_status === "paid" && s.metadata?.kind === "send" && s.metadata?.order_id === orderId;

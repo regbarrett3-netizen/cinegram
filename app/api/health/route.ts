@@ -1,34 +1,26 @@
-// Setup check: reports which Stripe key the server is using and whether it's live or test.
-// Never returns key values, only variable names and the key's mode.
+// Setup check: which Stripe key the server uses and whether Stripe accepts it.
+// Never returns key values: only variable names, the key's type prefix, length and Stripe's verdict.
 import { NextResponse } from "next/server";
+import { stripeAccepts, stripeKeyChoice } from "../../../lib/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Describes a key without revealing it: its type prefix, length, and common paste problems. */
-function mode(raw?: string) {
-  if (!raw) return "missing";
-  const k = raw.trim(), notes: string[] = [];
-  if (k !== raw) notes.push("has spaces or line breaks around it");
-  if (/\s/.test(k)) notes.push("has spaces inside");
-  if (/^["'].*["']$/.test(k)) notes.push("wrapped in quotes");
-  const m = k.replace(/^["']/, "").match(/^([a-z]+_(?:live|test))_/);
-  const kind = !m ? "not a Stripe key"
-    : m[1].startsWith("sk_") || m[1].startsWith("rk_") ? (m[1].endsWith("live") ? "live" : "test")
-    : m[1].startsWith("pk_") ? "PUBLISHABLE key (wrong one: need the SECRET key)"
-    : `${m[1]} key (wrong type)`;
-  return `${kind}; ${k.length} characters${notes.length ? "; " + notes.join(", ") : ""}`;
+async function describe(raw?: string) {
+  if (!raw) return { set: false };
+  const k = raw.trim().replace(/^["']|["']$/g, "");
+  const type = k.match(/^([a-z]{2,4}_(?:live|test))_/)?.[1] || "unrecognized prefix";
+  const verdict = await stripeAccepts(k);
+  return { set: true, type, length: k.length, spacesAround: k !== raw.trim() || raw !== raw.trim(), stripeAccepts: verdict.ok, stripeStatus: verdict.status, stripeError: verdict.error };
 }
 
 export async function GET() {
-  const live = process.env.STRIPE_LIVE_SECRET_KEY || process.env.STRIKE_LIVE_SECRET_KEY;
-  const regular = process.env.STRIPE_SECRET_KEY;
+  const choice = await stripeKeyChoice();
   return NextResponse.json({
-    stripeInUse: process.env.STRIPE_LIVE_SECRET_KEY ? "STRIPE_LIVE_SECRET_KEY" : process.env.STRIKE_LIVE_SECRET_KEY ? "STRIKE_LIVE_SECRET_KEY" : regular ? "STRIPE_SECRET_KEY" : "none",
-    stripeMode: mode(live || regular),
-    STRIPE_LIVE_SECRET_KEY: mode(process.env.STRIPE_LIVE_SECRET_KEY),
-    STRIKE_LIVE_SECRET_KEY: mode(process.env.STRIKE_LIVE_SECRET_KEY),
-    STRIPE_SECRET_KEY: mode(regular),
+    stripeInUse: choice.source,
+    stripeMode: /_live_/.test(choice.key) ? "live" : /_test_/.test(choice.key) ? "test" : "unknown",
+    STRIPE_LIVE_SECRET_KEY: await describe(process.env.STRIPE_LIVE_SECRET_KEY),
+    STRIKE_LIVE_SECRET_KEY: await describe(process.env.STRIKE_LIVE_SECRET_KEY),
     stripeVariableNames: Object.keys(process.env).filter((n) => /STRIPE|STRIKE/i.test(n)).sort(),
     vercelEnv: process.env.VERCEL_ENV || "unknown",
   });
