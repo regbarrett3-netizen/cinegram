@@ -19,9 +19,12 @@ export function SiteHeader({ lang, setLang, active = "none" }: { lang: Lang; set
   return (
     <header className="w-full max-w-5xl pt-4 sm:pt-6 mb-6 sm:mb-10">
       <div className="flex items-center justify-between gap-3">
-        <Link href={`/?lang=${lang}`} className="flex items-center gap-2" aria-label="Cinegram home">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-pink-500 via-fuchsia-500 to-amber-400 text-lg shadow-lg shadow-pink-500/30">💌</span>
-          <span className="text-xl sm:text-2xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-300 via-fuchsia-200 to-amber-200">CINEGRAM</span>
+        <Link href={`/?lang=${lang}`} className="flex min-w-0 items-center gap-2.5" aria-label="CineGramCards.com home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-mark.png" alt="" width={44} height={44} className="h-11 w-11 shrink-0 rounded-xl bg-[#e7decd] object-cover shadow-lg shadow-black/30 ring-1 ring-amber-200/40" />
+          <span className="truncate font-serif text-xl sm:text-2xl font-semibold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-amber-100 via-amber-200 to-teal-200">
+            CineGramCards<span className="hidden sm:inline">.com</span>
+          </span>
         </Link>
         <label className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80">
           <Globe className="h-4 w-4 text-fuchsia-300" />

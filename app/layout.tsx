@@ -3,7 +3,8 @@ import "./globals.css";
 import { cardSerif } from "../lib/cardFont";
 
 export const metadata: Metadata = {
-  title: "Cinegram – Beautiful cards, sent in 1-2-3",
+  title: "CineGramCards.com – All-occasion cards, sent in 1-2-3",
+  metadataBase: new URL("https://cinegramcards.com"),
   description: "Pick the occasion, say who it's for, choose a card. Original art cards, animated cards with music and AI video cards, emailed for you.",
 };
 
