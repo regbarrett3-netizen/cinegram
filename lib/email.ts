@@ -1,17 +1,17 @@
 // Sends card emails through Resend (https://resend.com). Server-only.
 import { isLang, type Lang } from "./i18n";
 
-const FROM = process.env.EMAIL_FROM || "Cinegram <cards@cinegram.cards>";
+const FROM = process.env.EMAIL_FROM || "Cinegram <cards@cinegramcards.com>";
 
 type T = { subject: (from: string) => string; hi: (to: string) => string; body: (from: string) => string; action: string; video: string; open: string; footer: string };
 
 const TEXT: Record<Lang, T> = {
-  en: { subject: (f) => `${f} sent you a card 💌`, hi: (t) => `Hi ${t},`, body: (f) => `${f} sent you a Cinegram card.`, action: "It moves and plays music, so turn your sound on.", video: "It's a video message made just for you.", open: "Open your card", footer: "Sent with Cinegram · cinegram.cards" },
-  es: { subject: (f) => `${f} te envió una tarjeta 💌`, hi: (t) => `Hola, ${t}:`, body: (f) => `${f} te envió una tarjeta de Cinegram.`, action: "Se mueve y tiene música: activa el sonido.", video: "Es un mensaje en video hecho solo para ti.", open: "Abrir tu tarjeta", footer: "Enviada con Cinegram · cinegram.cards" },
-  fr: { subject: (f) => `${f} t'a envoyé une carte 💌`, hi: (t) => `Bonjour ${t},`, body: (f) => `${f} t'a envoyé une carte Cinegram.`, action: "Elle bouge et joue de la musique : active le son.", video: "C'est un message vidéo rien que pour toi.", open: "Ouvrir ta carte", footer: "Envoyée avec Cinegram · cinegram.cards" },
-  pt: { subject: (f) => `${f} enviou-te um cartão 💌`, hi: (t) => `Olá, ${t},`, body: (f) => `${f} enviou-te um cartão Cinegram.`, action: "Mexe-se e tem música: liga o som.", video: "É uma mensagem em vídeo feita só para ti.", open: "Abrir o teu cartão", footer: "Enviado com Cinegram · cinegram.cards" },
-  zh: { subject: (f) => `${f} 给你寄了一张贺卡 💌`, hi: (t) => `${t}，你好：`, body: (f) => `${f} 给你寄了一张 Cinegram 贺卡。`, action: "贺卡会动，还有音乐，记得打开声音。", video: "这是专门为你制作的视频祝福。", open: "打开你的贺卡", footer: "由 Cinegram 发送 · cinegram.cards" },
-  yue: { subject: (f) => `${f} 寄咗張賀卡俾你 💌`, hi: (t) => `${t}，你好：`, body: (f) => `${f} 寄咗張 Cinegram 賀卡俾你。`, action: "張賀卡識郁，仲有音樂，記得開聲。", video: "呢段係專登為你整嘅影片祝福。", open: "打開你張賀卡", footer: "由 Cinegram 寄出 · cinegram.cards" },
+  en: { subject: (f) => `${f} sent you a card 💌`, hi: (t) => `Hi ${t},`, body: (f) => `${f} sent you a Cinegram card.`, action: "It moves and plays music, so turn your sound on.", video: "It's a video message made just for you.", open: "Open your card", footer: "Sent with Cinegram · cinegramcards.com" },
+  es: { subject: (f) => `${f} te envió una tarjeta 💌`, hi: (t) => `Hola, ${t}:`, body: (f) => `${f} te envió una tarjeta de Cinegram.`, action: "Se mueve y tiene música: activa el sonido.", video: "Es un mensaje en video hecho solo para ti.", open: "Abrir tu tarjeta", footer: "Enviada con Cinegram · cinegramcards.com" },
+  fr: { subject: (f) => `${f} t'a envoyé une carte 💌`, hi: (t) => `Bonjour ${t},`, body: (f) => `${f} t'a envoyé une carte Cinegram.`, action: "Elle bouge et joue de la musique : active le son.", video: "C'est un message vidéo rien que pour toi.", open: "Ouvrir ta carte", footer: "Envoyée avec Cinegram · cinegramcards.com" },
+  pt: { subject: (f) => `${f} enviou-te um cartão 💌`, hi: (t) => `Olá, ${t},`, body: (f) => `${f} enviou-te um cartão Cinegram.`, action: "Mexe-se e tem música: liga o som.", video: "É uma mensagem em vídeo feita só para ti.", open: "Abrir o teu cartão", footer: "Enviado com Cinegram · cinegramcards.com" },
+  zh: { subject: (f) => `${f} 给你寄了一张贺卡 💌`, hi: (t) => `${t}，你好：`, body: (f) => `${f} 给你寄了一张 Cinegram 贺卡。`, action: "贺卡会动，还有音乐，记得打开声音。", video: "这是专门为你制作的视频祝福。", open: "打开你的贺卡", footer: "由 Cinegram 发送 · cinegramcards.com" },
+  yue: { subject: (f) => `${f} 寄咗張賀卡俾你 💌`, hi: (t) => `${t}，你好：`, body: (f) => `${f} 寄咗張 Cinegram 賀卡俾你。`, action: "張賀卡識郁，仲有音樂，記得開聲。", video: "呢段係專登為你整嘅影片祝福。", open: "打開你張賀卡", footer: "由 Cinegram 寄出 · cinegramcards.com" },
 };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
