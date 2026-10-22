@@ -13,14 +13,14 @@ function mode(k?: string) {
 }
 
 export async function GET() {
-  const live = process.env.STRIPE_LIVE_SECRET_KEY;
+  const live = process.env.STRIPE_LIVE_SECRET_KEY || process.env.STRIKE_LIVE_SECRET_KEY;
   const regular = process.env.STRIPE_SECRET_KEY;
   return NextResponse.json({
-    stripeInUse: live ? "STRIPE_LIVE_SECRET_KEY" : regular ? "STRIPE_SECRET_KEY" : "none",
+    stripeInUse: process.env.STRIPE_LIVE_SECRET_KEY ? "STRIPE_LIVE_SECRET_KEY" : process.env.STRIKE_LIVE_SECRET_KEY ? "STRIKE_LIVE_SECRET_KEY" : regular ? "STRIPE_SECRET_KEY" : "none",
     stripeMode: mode(live || regular),
     STRIPE_LIVE_SECRET_KEY: mode(live),
     STRIPE_SECRET_KEY: mode(regular),
-    stripeVariableNames: Object.keys(process.env).filter((n) => /STRIPE/i.test(n)).sort(),
+    stripeVariableNames: Object.keys(process.env).filter((n) => /STRIPE|STRIKE/i.test(n)).sort(),
     vercelEnv: process.env.VERCEL_ENV || "unknown",
   });
 }
