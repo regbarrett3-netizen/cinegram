@@ -23,7 +23,7 @@ const alertText = async () => (await page.locator('[role="alert"]').allInnerText
 
 async function step(name, fn) {
   try { await fn(); log(name, true); }
-  catch (e) { await shot(`FAIL-${name.replace(/\W+/g, "-")}`).catch(() => {}); log(name, false, `${String(e.message || e).split("\n")[0]} ${await alertText().catch(() => "")}`); throw e; }
+  catch (e) { await page.screenshot({ path: `${out}/FAIL-${name.replace(/\W+/g, "-")}.png`, fullPage: true }).catch(() => {}); log(name, false, `${String(e.message || e).split("\n")[0]} ${await alertText().catch(() => "")}`); throw e; }
 }
 
 // ---------- API smoke checks ----------
@@ -108,6 +108,7 @@ if (RUN_VIDEO) {
     });
     await step("Video: selfie + preset voice + consent", async () => {
       await page.locator('input[type="file"][accept="image/*"]').setInputFiles("e2e/face.jpg");
+      await page.locator("label img").first().waitFor({ timeout: 20000 });
       await page.getByRole("tab", { name: "Pick a voice" }).click();
       await page.locator('input[type="checkbox"]').check();
       await shot("video-2-face-voice");

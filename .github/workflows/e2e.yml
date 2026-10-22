@@ -20,7 +20,7 @@ jobs:
       - run: npm init -y >/dev/null && npm i playwright@1 && npx playwright install --with-deps chromium
         working-directory: e2e
       - name: Synthetic test face (AI-generated, not a real person)
-        run: curl -sSL -A "Mozilla/5.0" -o e2e/face.jpg https://thispersondoesnotexist.com/ && file e2e/face.jpg
+        run: curl -sSL -A "Mozilla/5.0" -o e2e/face.jpg https://thispersondoesnotexist.com/ && file e2e/face.jpg && file e2e/face.jpg | grep -qi "image data"
       - name: Run checks
         run: node e2e/live.mjs
         env:
