@@ -14,7 +14,7 @@ import { cardJpeg } from "../lib/cardRender";
 import { CARD_FONT_FAMILY } from "../lib/cardFont";
 import { shrinkPhoto } from "../lib/media";
 import { loadImage } from "../lib/polaroid";
-import { OCCASION_ACTIONS, PRICE, WIZARD_KEY, actionTextFor, priceLabel, type WizardState } from "../lib/send";
+import { FINAL_SALE, OCCASION_ACTIONS, PRICE, WIZARD_KEY, actionTextFor, priceLabel, type WizardState } from "../lib/send";
 import { SITE } from "../lib/siteText";
 import { isEmail } from "../lib/emailCheck";
 
@@ -306,6 +306,7 @@ export default function SendFlow() {
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />} {t.pay(priceLabel(PRICE[choice.kind]), toName.trim() || "…")}
               </button>
               <p className="text-center text-xs text-white/40">{t.secure}</p>
+              <p className="text-center text-xs text-white/40">{FINAL_SALE[lang]}</p>
               <button onClick={() => go(3)} className="btn-ghost"><ArrowLeft className="h-4 w-4" /> {t.back}</button>
             </div>
           </section>

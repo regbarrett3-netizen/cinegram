@@ -5,6 +5,7 @@ import { CheckCircle2, Clapperboard, CreditCard, Download, Loader2, RotateCcw, S
 import { ActionCanvas } from "../../components/action/ActionCanvas";
 import { CardsHeader } from "../../components/cards/CardsHeader";
 import { useCardLang } from "../../components/cards/useCardLang";
+import { FINAL_SALE } from "../../lib/send";
 import { ACTION_IDS, ACTION_TEXT, ACTION_UI, isActionId, type ActionId } from "../../lib/action/catalog";
 import { recordVideo, videoSupport } from "../../lib/action/render";
 import { musicFor } from "../../lib/action/music";
@@ -259,6 +260,7 @@ export default function ActionCardsPage() {
               {phase === "detail" && (
                 <>
                   <p className="text-xs text-white/55 text-center">{ui.previewNote}</p>
+                  <p className="text-center text-xs text-white/40">{FINAL_SALE[lang]}</p>
                   <button onClick={buy} disabled={busy} className={BTN_MAIN}>{busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />} {ui.buy}</button>
                 </>
               )}

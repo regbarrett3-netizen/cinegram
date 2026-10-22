@@ -5,6 +5,15 @@ import type { Lang } from "./i18n";
 
 export type SendKind = "quick" | "action" | "video";
 export const PRICE: Record<SendKind, number> = { quick: 199, action: 299, video: 299 };
+/** Shown under every pay button and on Stripe checkout: cards are delivered instantly, so sales are final. */
+export const FINAL_SALE: Record<Lang, string> = {
+  en: "All sales are final. Your card is delivered instantly.",
+  es: "Todas las ventas son definitivas. Tu tarjeta se entrega al instante.",
+  fr: "Toutes les ventes sont définitives. Ta carte est livrée instantanément.",
+  pt: "Todas as vendas são finais. O teu cartão é entregue de imediato.",
+  zh: "所有购买均不可退款。贺卡会立即送达。",
+  yue: "所有購買都唔設退款。賀卡會即刻送到。",
+};
 export const priceLabel = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 /** Action cards that suit each occasion, best first. */

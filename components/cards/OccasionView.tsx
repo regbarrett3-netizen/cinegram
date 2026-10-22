@@ -5,6 +5,7 @@ import { CheckCircle2, CreditCard, Download, Loader2, Share2, X } from "lucide-r
 import { CardCanvas } from "./CardCanvas";
 import { CardsHeader } from "./CardsHeader";
 import { useCardLang } from "./useCardLang";
+import { FINAL_SALE } from "../../lib/send";
 import { CARD_TEXT, CARD_UI, OCCASION_EMOJI, OCCASION_NAMES, cardById, cardsFor, type CardOccasion } from "../../lib/cardsCatalog";
 import { cardPng } from "../../lib/cardRender";
 import { CARD_FONT_FAMILY } from "../../lib/cardFont";
@@ -269,6 +270,7 @@ export function OccasionView({ occasion }: { occasion: CardOccasion }) {
               {phase === "detail" && (
                 <>
                   <p className="text-xs text-white/55 text-center">{ui.previewNote}</p>
+                  <p className="text-center text-xs text-white/40">{FINAL_SALE[lang]}</p>
                   <button onClick={buy} disabled={busy} className={BTN_MAIN}>
                     {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />} {ui.buy}
                   </button>

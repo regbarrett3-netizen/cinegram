@@ -10,7 +10,7 @@ import { PRESET_VOICES } from "../../lib/voices";
 import { SiteHeader } from "../../components/SiteHeader";
 import { useCardLang } from "../../components/cards/useCardLang";
 import { SITE } from "../../lib/siteText";
-import { WIZARD_KEY, videoOccasion, type WizardState } from "../../lib/send";
+import { FINAL_SALE, WIZARD_KEY, videoOccasion, type WizardState } from "../../lib/send";
 import { isEmail } from "../../lib/emailCheck";
 
 const OCCASIONS: { id: Occasion; icon: typeof Cake }[] = [
@@ -613,6 +613,7 @@ export default function CinegramApp() {
               </div>
             </div>
             <p className="text-xs text-white/55">{t.previewNote}</p>
+            <p className="text-center text-xs text-white/40">{FINAL_SALE[lang]}</p>
             <div className="flex flex-col gap-3">
               <button
                 onClick={checkout}

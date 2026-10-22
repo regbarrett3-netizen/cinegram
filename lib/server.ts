@@ -161,6 +161,9 @@ const stripeAuth = () => ({ Authorization: `Bearer ${need("STRIPE_SECRET_KEY")}`
 
 export const PRICE_CENTS = 299;
 
+// Cards are delivered the moment payment clears, so every sale is final.
+const FINAL_SALE_EN = "All sales are final. Your card is delivered instantly after payment, so it can't be refunded.";
+
 export async function stripeCreateCheckout(requestId: string, appUrl: string): Promise<string> {
   const body = new URLSearchParams({
     mode: "payment",
@@ -170,6 +173,7 @@ export async function stripeCreateCheckout(requestId: string, appUrl: string): P
     "line_items[0][price_data][product_data][name]": "Cinegram HD Video Card",
     "line_items[0][price_data][product_data][description]": "Download your video card without the preview watermark",
     "metadata[request_id]": requestId,
+    "custom_text[submit][message]": FINAL_SALE_EN,
     success_url: `${appUrl}/video?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/video?status=cancelled`,
   });
@@ -215,6 +219,7 @@ export async function stripeCreateCardCheckout(o: {
     "line_items[0][price_data][product_data][description]": "Ready-made art card, full-size download without the watermark",
     "metadata[kind]": "card",
     "metadata[card_id]": o.cardId,
+    "custom_text[submit][message]": FINAL_SALE_EN,
     success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${back}&status=cancelled`,
   });
@@ -254,6 +259,7 @@ export async function stripeCreateActionCheckout(o: { actionId: string; title: s
     "line_items[0][price_data][product_data][description]": "Animated video card, downloadable without the watermark",
     "metadata[kind]": "action",
     "metadata[action_id]": o.actionId,
+    "custom_text[submit][message]": FINAL_SALE_EN,
     success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${back}&status=cancelled`,
   });
@@ -290,6 +296,7 @@ export async function stripeCreateSendCheckout(o: { orderId: string; title: stri
     "line_items[0][price_data][product_data][description]": `Emailed to ${o.toName.slice(0, 60)} as soon as payment completes`,
     "metadata[kind]": "send",
     "metadata[order_id]": o.orderId,
+    "custom_text[submit][message]": FINAL_SALE_EN,
     success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${back}&status=cancelled`,
   });
