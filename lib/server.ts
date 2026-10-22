@@ -159,7 +159,12 @@ export async function elevenDeleteVoice(voiceId: string): Promise<void> {
 
 // STRIPE_LIVE_SECRET_KEY wins when set (lets the live key sit beside an integration-managed sandbox key).
 // STRIKE_LIVE_SECRET_KEY: the name the live key was saved under in Vercel (phone autocorrect); accepted as-is.
-const stripeKey = () => process.env.STRIPE_LIVE_SECRET_KEY || process.env.STRIKE_LIVE_SECRET_KEY || need("STRIPE_SECRET_KEY");
+const looksLikeSecret = (k?: string) => !!k && /^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(k.trim());
+/** Uses the live key only if it looks like a real secret key, so a bad paste can't break checkout. */
+const stripeKey = () => {
+  for (const k of [process.env.STRIPE_LIVE_SECRET_KEY, process.env.STRIKE_LIVE_SECRET_KEY]) if (looksLikeSecret(k)) return k!.trim();
+  return need("STRIPE_SECRET_KEY");
+};
 const stripeAuth = () => ({ Authorization: `Bearer ${stripeKey()}` });
 
 export const PRICE_CENTS = 299;
