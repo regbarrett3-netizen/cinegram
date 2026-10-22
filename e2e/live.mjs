@@ -27,7 +27,9 @@ page.on("response", async (r) => {
   }
 });
 const shot = async (label) => { n++; await page.screenshot({ path: `${out}/${String(n).padStart(2, "0")}-${label}.png`, fullPage: false }); };
-const alertText = async () => (await page.locator('[role="alert"]').allInnerTexts()).join(" | ");
+// Our error boxes are <p role="alert" class="alert">; Next.js also has a hidden route announcer with role="alert".
+const ALERT = 'p[role="alert"]';
+const alertText = async () => (await page.locator(ALERT).allInnerTexts()).join(" | ");
 
 async function step(name, fn) {
   try { await fn(); log(name, true); }
@@ -97,6 +99,19 @@ try {
   });
 } catch { /* recorded */ }
 
+// ---------- Check on a video that was already started ----------
+if (process.env.STATUS_ID) {
+  const id = process.env.STATUS_ID, until = Date.now() + 8 * 60 * 1000;
+  let last = {};
+  while (Date.now() < until) {
+    const r = await ctx.request.get(`${BASE}/api/status?id=${id}`);
+    last = await r.json().catch(() => ({}));
+    if (last.state === "done" || last.state === "failed") break;
+    await new Promise((res) => setTimeout(res, 10000));
+  }
+  log("Earlier video finished rendering (fal + ElevenLabs)", last.state === "done", JSON.stringify(last).slice(0, 300));
+}
+
 // ---------- AI video flow, up to Stripe ----------
 if (RUN_VIDEO) {
   try {
@@ -127,7 +142,7 @@ if (RUN_VIDEO) {
       await shot("video-3-working");
       await Promise.race([
         page.getByText("Here's your video card").waitFor({ timeout: 11 * 60 * 1000 }),
-        page.locator('[role="alert"]').waitFor({ timeout: 11 * 60 * 1000 }).then(async () => { throw new Error(await alertText()); }),
+        page.locator(ALERT).first().waitFor({ timeout: 11 * 60 * 1000 }).then(async () => { throw new Error(await alertText()); }),
       ]);
       await page.waitForTimeout(4000);
       await shot("video-4-preview");

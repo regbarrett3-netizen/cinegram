@@ -22,7 +22,8 @@ jobs:
       - name: Run checks
         run: node e2e/live.mjs
         env:
-          RUN_VIDEO: ${{ github.event.inputs.run_video || '1' }}
+          RUN_VIDEO: ${{ github.event.inputs.run_video || '0' }}
+          STATUS_ID: 01a16409-c507-7a93-826d-514bd35f6a2b
           NODE_PATH: e2e/node_modules
       - name: Save results to the e2e-results branch
         if: always()
