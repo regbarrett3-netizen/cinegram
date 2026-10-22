@@ -54,6 +54,12 @@ for (const path of ["/", "/video", "/cards", "/action"]) {
   log("Order API rejects a bad card", r.status() === 400, `status ${r.status()}`);
 }
 
+{
+  const r = await ctx.request.get(BASE + "/api/health");
+  const h = await r.json().catch(() => ({}));
+  log("Stripe key in use is live", h.stripeMode === "live", JSON.stringify(h));
+}
+
 // ---------- 1-2-3 send flow, text delivery, up to Stripe ----------
 try {
   await step("Send flow: home page loads", async () => {
