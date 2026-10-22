@@ -245,7 +245,7 @@ export default function SendFlow() {
               <h2 className="title-serif text-3xl sm:text-4xl font-semibold text-amber-50">{t.s3Title(toName.trim())}</h2>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                 <button onClick={() => go(1)} className="chip hover:bg-white/10"><span aria-hidden>{OCCASION_EMOJI[occasion]}</span> {names[occasion]} · {t.change}</button>
-                <button onClick={() => go(2)} className="chip hover:bg-white/10"><Mail className="h-3.5 w-3.5" /> {toEmail} · {t.change}</button>
+                <button onClick={() => go(2)} className="chip hover:bg-white/10">{deliverBy === "text" ? <MessageSquare className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />} {deliverBy === "text" ? (toPhone.trim() || tx.byText) : toEmail} · {t.change}</button>
               </div>
             </div>
 
