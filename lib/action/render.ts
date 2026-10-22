@@ -115,7 +115,7 @@ export function drawFrame(c: Ctx, id: ActionId, t: number, o: FrameOpts) {
     for (let row = -9; row <= 9; row++) {
       const big = row % 2 === 0;
       c.font = big ? `700 60px ${o.fontFamily}` : `600 26px ${o.fontFamily}`;
-      c.globalAlpha = big ? 0.32 : 0.4;
+      c.globalAlpha = big ? 0.15 : 0.18;
       const label = big ? o.watermark : "cinegramcards.com";
       const step = big ? 380 : 320;
       const shift = (row & 2 ? step / 2 : 0);

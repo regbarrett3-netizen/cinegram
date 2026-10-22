@@ -169,7 +169,7 @@ export async function drawCard(canvas: HTMLCanvasElement, o: DrawOptions): Promi
     for (let row = -5; row <= 5; row++) {
       const big = row % 2 === 0;
       ctx.font = big ? `700 40px ${fam}` : `600 18px ${fam}`;
-      ctx.globalAlpha = big ? 0.32 : 0.4;
+      ctx.globalAlpha = big ? 0.15 : 0.18;
       const label = big ? o.watermark : "cinegramcards.com";
       const step = big ? 260 : 220;
       const shift = (row & 2 ? step / 2 : 0);
