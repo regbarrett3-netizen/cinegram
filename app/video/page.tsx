@@ -156,12 +156,16 @@ export default function VideoCardPage() {
     if (step !== "working" || !requestId) return;
     const started = Date.now();
     let stopped = false;
+    let failedChecks = 0;
     const tick = async () => {
       if (stopped) return;
       if (Date.now() - started > GIVE_UP_MS) { setError(t.error); setStep(2); return; }
       try {
-        const s = (await (await fetch(`/api/status?id=${encodeURIComponent(requestId)}`)).json()) as { state: string; videoUrl?: string; error?: string };
+        const s = (await (await fetch(`/api/status?id=${encodeURIComponent(requestId)}`)).json()) as { state: string; videoUrl?: string; error?: string; note?: string };
         if (stopped) return;
+        // A status check that keeps failing (not the video itself) shouldn't spin for 12 minutes.
+        failedChecks = s.note ? failedChecks + 1 : 0;
+        if (failedChecks >= 8) { setError(`${t.error} ${s.note}`.trim()); setStep(2); return; }
         if (s.state === "done" && s.videoUrl) {
           setVideoUrl(s.videoUrl);
           save({ lang, requestId, videoUrl: s.videoUrl });
