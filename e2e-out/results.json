@@ -1,0 +1,78 @@
+{
+  "base": "https://cinegramcards.com",
+  "results": [
+    {
+      "name": "GET /",
+      "ok": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "GET /video",
+      "ok": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "GET /cards",
+      "ok": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "GET /action",
+      "ok": true,
+      "detail": "status 200"
+    },
+    {
+      "name": "ElevenLabs voice previews load (/api/voices)",
+      "ok": true,
+      "detail": "status 200, 6 voices "
+    },
+    {
+      "name": "Order API rejects a bad card",
+      "ok": true,
+      "detail": "status 400"
+    },
+    {
+      "name": "Stripe key in use is live",
+      "ok": true,
+      "detail": "{\"stripeInUse\":\"STRIPE_SECRET_KEY\",\"stripeMode\":\"live\",\"STRIPE_LIVE_SECRET_KEY\":{\"set\":false},\"STRIKE_LIVE_SECRET_KEY\":{\"set\":true,\"type\":\"unrecognized prefix\",\"length\":27,\"spacesAround\":false,\"stripeAccepts\":false,\"stripeStatus\":401,\"stripeError\":\"invalid_request_error\"},\"stripeVariableNames\":[\"NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY\",\"STRIKE_LIVE_SECRET_KEY\",\"STRIPE_PUBLISHABLE_KEY\",\"STRIPE_SECRET_KEY\"],\"vercelEnv\":\"production\"}"
+    },
+    {
+      "name": "Send flow: home page loads",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Send flow: pick Birthday",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Send flow: names + Text or social",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Send flow: card list shows art cards",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Send flow: preview + final-sale note",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Send flow: Pay opens live Stripe checkout",
+      "ok": false,
+      "detail": "Final-sale note missing on Stripe checkout "
+    }
+  ],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 ()",
+    "Failed to load resource: the server responded with a status of 401 ()"
+  ],
+  "network": [
+    "401 https://api.hcaptcha.com/authenticate",
+    "401 https://api.hcaptcha.com/authenticate"
+  ]
+}
