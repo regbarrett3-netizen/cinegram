@@ -1,0 +1,29 @@
+name: Live site check
+on:
+  workflow_dispatch:
+    inputs:
+      run_video:
+        description: "Also generate a real AI video (uses fal + ElevenLabs credits)"
+        default: "1"
+  push:
+    branches: [e2e-test]
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm init -y >/dev/null && npm i playwright@1 && npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Synthetic test face (AI-generated, not a real person)
+        run: curl -sSL -A "Mozilla/5.0" -o e2e/face.jpg https://thispersondoesnotexist.com/ && file e2e/face.jpg
+      - name: Run checks
+        run: node e2e/live.mjs
+        env:
+          RUN_VIDEO: ${{ github.event.inputs.run_video || '1' }}
+          NODE_PATH: e2e/node_modules
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-out, path: e2e-out }
