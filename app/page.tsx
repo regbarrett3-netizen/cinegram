@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, CheckCircle2, ChevronRight, Copy, Loader2, Lock, Mail, MessageSquare, RotateCcw, Share2, Sparkles, Trash2, Video, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCircle2, ChevronRight, Loader2, Lock, Mail, MessageSquare, RotateCcw, Sparkles, Trash2, Video, Volume2, VolumeX } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
+import { ShareCard } from "../components/ShareCard";
 import { useCardLang } from "../components/cards/useCardLang";
 import { CardCanvas } from "../components/cards/CardCanvas";
 import { ActionCanvas } from "../components/action/ActionCanvas";
@@ -17,7 +18,7 @@ import { loadImage } from "../lib/polaroid";
 import { FINAL_SALE, OCCASION_ACTIONS, PRICE, WIZARD_KEY, actionTextFor, priceLabel, type WizardState } from "../lib/send";
 import { SITE } from "../lib/siteText";
 import { isEmail } from "../lib/emailCheck";
-import { TEXT_UI, isPhone, shareLinks, smsHref, type DeliverBy } from "../lib/textSend";
+import { TEXT_UI, isPhone, type DeliverBy } from "../lib/textSend";
 
 type Step = 1 | 2 | 3 | 4 | "done";
 type Choice = { kind: "quick"; id: string } | { kind: "action"; id: ActionId };
@@ -44,7 +45,6 @@ export default function SendFlow() {
   const [fromName, setFromName] = useState("");
   const [deliverBy, setDeliverBy] = useState<DeliverBy>("email");
   const [toPhone, setToPhone] = useState("");
-  const [copied, setCopied] = useState(false);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photo, setPhoto] = useState<HTMLImageElement | null>(null);
@@ -98,7 +98,7 @@ export default function SendFlow() {
   }
 
   function goVideo() {
-    persist({ occasion: occasion || undefined, toName, toEmail, fromName, lang, choice: null, photoUrl });
+    persist({ occasion: occasion || undefined, toName, toEmail, fromName, lang, choice: null, photoUrl, deliverBy, toPhone });
     window.location.href = `/video?lang=${lang}`;
   }
 
@@ -153,7 +153,7 @@ export default function SendFlow() {
   function startOver() {
     try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* ignore */ }
     window.history.replaceState(null, "", "/");
-    setOccasion(null); setToName(""); setToEmail(""); setToPhone(""); setDeliverBy("email"); setCopied(false); setChoice(null); setPhoto(null); setPhotoUrl(null); setDelivery(null);
+    setOccasion(null); setToName(""); setToEmail(""); setToPhone(""); setDeliverBy("email"); setChoice(null); setPhoto(null); setPhotoUrl(null); setDelivery(null);
     go(1);
   }
 
@@ -346,29 +346,7 @@ export default function SendFlow() {
               <div className="space-y-4 py-6"><Loader2 className="mx-auto h-10 w-10 animate-spin text-pink-300" /><p className="text-lg font-bold">{t.sending}</p></div>
             )}
             {delivery?.state === "sent" && delivery.byText && delivery.link && (
-              <div className="space-y-5">
-                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-pink-500 to-amber-400 text-4xl shadow-xl shadow-pink-500/30">💌</div>
-                <h2 className="title-serif text-4xl font-semibold text-amber-50">{tx.readyTitle(delivery.toName || "")}</h2>
-                <p className="text-white/70">{tx.readyBody}</p>
-                <a href={smsHref(delivery.toPhone || "", tx.smsBody(delivery.fromName || "", delivery.link))} className="btn-primary"><MessageSquare className="h-5 w-5" /> {tx.textIt(delivery.toName || "")}</a>
-                <div className="space-y-2 pt-1">
-                  <p className="text-sm text-white/60">{tx.socialLabel}</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <a href={shareLinks.whatsapp(tx.smsBody(delivery.fromName || "", delivery.link))} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full text-sm">{tx.whatsapp}</a>
-                    <a href={shareLinks.facebook(delivery.link)} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full text-sm">{tx.postFacebook}</a>
-                    <a href={shareLinks.x(tx.postText(delivery.toName || ""), delivery.link)} target="_blank" rel="noopener noreferrer" className="btn-secondary w-full text-sm">{tx.postX}</a>
-                    <button onClick={() => {
-                      const text = tx.smsBody(delivery.fromName || "", delivery.link || "");
-                      if (typeof navigator.share === "function") navigator.share({ text, url: delivery.link }).catch(() => undefined);
-                      else navigator.clipboard?.writeText(delivery.link || "").then(() => setNotice(tx.instagramHint)).catch(() => undefined);
-                    }} className="btn-secondary w-full text-sm"><Share2 className="h-4 w-4" /> {tx.instagram}</button>
-                  </div>
-                  {notice && <p role="status" className="text-sm text-emerald-300">{notice}</p>}
-                </div>
-                <button onClick={() => { navigator.clipboard?.writeText(delivery.link || "").then(() => setCopied(true)).catch(() => undefined); }} className="btn-ghost"><Copy className="h-4 w-4" /> {copied ? tx.copied : tx.copyLink}</button>
-                <a href={delivery.link} target="_blank" rel="noopener noreferrer" className="btn-ghost"><CheckCircle2 className="h-4 w-4" /> {t.viewCard}</a>
-                <button onClick={startOver} className="btn-ghost"><RotateCcw className="h-4 w-4" /> {t.another}</button>
-              </div>
+              <ShareCard lang={lang} toName={delivery.toName || ""} fromName={delivery.fromName || ""} toPhone={delivery.toPhone} link={delivery.link} onAnother={startOver} />
             )}
             {delivery?.state === "sent" && !delivery.byText && (
               <div className="space-y-5">

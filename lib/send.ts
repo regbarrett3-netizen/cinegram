@@ -67,5 +67,7 @@ export type WizardState = {
   toEmail?: string;
   fromName?: string;
   lang?: Lang;
+  deliverBy?: "email" | "text";
+  toPhone?: string;
 };
 export const WIZARD_KEY = "cinegram:send";

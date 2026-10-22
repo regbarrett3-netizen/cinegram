@@ -1,17 +1,21 @@
 "use client";
 
+// AI video card in 3 steps: 1) who it's for and what to say, 2) selfie and voice,
+// 3) preview, pay and it's sent automatically (email) or shared from the sender's phone (text/social).
 import React, { useEffect, useRef, useState } from "react";
-import {
-  Film, Mic, Square, Upload, CheckCircle2, Globe, Heart, PartyPopper, Cake, Trophy, CreditCard, Download, Loader2, RotateCcw, Play, Pause,
-} from "lucide-react";
-import { LANGUAGES, MAX_MESSAGE, STRINGS, isLang, type Lang, type Occasion } from "../../lib/i18n";
+import { Cake, Check, CheckCircle2, CreditCard, Download, Heart, Loader2, Mail, MessageSquare, Mic, PartyPopper, Pause, Play, RotateCcw, Square, Trophy, Upload } from "lucide-react";
+import { MAX_MESSAGE, STRINGS, isLang, type Lang, type Occasion } from "../../lib/i18n";
 import { shrinkPhoto, startRecording, toWav, type Recorder } from "../../lib/media";
 import { PRESET_VOICES } from "../../lib/voices";
 import { SiteHeader } from "../../components/SiteHeader";
+import { ShareCard } from "../../components/ShareCard";
 import { useCardLang } from "../../components/cards/useCardLang";
 import { SITE } from "../../lib/siteText";
 import { FINAL_SALE, WIZARD_KEY, videoOccasion, type WizardState } from "../../lib/send";
+import { TEXT_UI, isPhone, type DeliverBy } from "../../lib/textSend";
+import { VIDEO_FLOW } from "../../lib/videoFlow";
 import { isEmail } from "../../lib/emailCheck";
+import { isCardOccasion, type CardOccasion } from "../../lib/cardsCatalog";
 
 const OCCASIONS: { id: Occasion; icon: typeof Cake }[] = [
   { id: "bday", icon: Cake },
@@ -19,9 +23,12 @@ const OCCASIONS: { id: Occasion; icon: typeof Cake }[] = [
   { id: "party", icon: PartyPopper },
   { id: "victory", icon: Trophy },
 ];
+/** The card-catalog occasion we store for each video occasion when the sender didn't come from the 1-2-3 flow. */
+const CARD_OCCASION: Record<Occasion, CardOccasion> = { bday: "birthday", love: "love", party: "congrats", victory: "congrats" };
 
-type Step = "lang" | "occasion" | "write" | "capture" | "working" | "preview" | "checking" | "paid";
+type Step = 1 | 2 | "working" | 3 | "checking" | "done";
 type Phase = "upload" | "clone" | "queue" | "render";
+type Delivery = { sent: boolean; byText?: boolean; link?: string; toName?: string; toEmail?: string; toPhone?: string | null; fromName?: string; error?: string; needRecipient?: boolean };
 
 const SAVE_KEY = "cinegram:last";
 const MIN_SECONDS = 10;
@@ -29,37 +36,36 @@ const MAX_SECONDS = 30;
 const POLL_MS = 4000;
 const GIVE_UP_MS = 12 * 60 * 1000;
 
-const BTN_MAIN =
-  "w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 font-bold rounded-2xl text-base hover:opacity-90 transition disabled:opacity-50";
-
-function save(data: { lang: Lang; requestId: string; videoUrl: string }) {
-  try {
-    sessionStorage.setItem(SAVE_KEY, JSON.stringify(data));
-  } catch {
-    /* private mode */
-  }
+type Saved = { lang: Lang; requestId: string; videoUrl: string };
+function save(data: Saved) {
+  try { sessionStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch { /* private mode */ }
 }
-function load(): { lang: Lang; requestId: string; videoUrl: string } | null {
-  try {
-    const raw = sessionStorage.getItem(SAVE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+function load(): Saved | null {
+  try { const raw = sessionStorage.getItem(SAVE_KEY); return raw ? (JSON.parse(raw) as Saved) : null; } catch { return null; }
 }
 
-export default function CinegramApp() {
+export default function VideoCardPage() {
   const [lang, setLang] = useCardLang();
   const st = SITE[lang];
   const t = STRINGS[lang];
-  const [step, setStep] = useState<Step>("occasion");
+  const tx = TEXT_UI[lang];
+  const vf = VIDEO_FLOW[lang];
+  const [step, setStep] = useState<Step>(1);
 
+  // Step 1: who and what
   const [occasion, setOccasion] = useState<Occasion>("bday");
-  const [recipient, setRecipient] = useState("");
+  const [cardOccasion, setCardOccasion] = useState<CardOccasion | null>(null);
+  const [toName, setToName] = useState("");
+  const [fromName, setFromName] = useState("");
+  const [deliverBy, setDeliverBy] = useState<DeliverBy>("email");
+  const [toEmail, setToEmail] = useState("");
+  const [toPhone, setToPhone] = useState("");
   const [message, setMessage] = useState("");
   const [messageEdited, setMessageEdited] = useState(false);
+  const [showScene, setShowScene] = useState(false);
   const [scene, setScene] = useState("");
 
+  // Step 2: face and voice
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [voice, setVoice] = useState<Blob | null>(null);
@@ -74,92 +80,75 @@ export default function CinegramApp() {
   const [playing, setPlaying] = useState<string | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
 
+  // Step 3 and after
   const [phase, setPhase] = useState<Phase>("upload");
   const [requestId, setRequestId] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Errors show near the top; bring them into view so a failed payment is never silent.
-  useEffect(() => { if (error) document.querySelector('[role="alert"]')?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [error]);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [wiz, setWiz] = useState<WizardState>({});
-  const [sendTo, setSendTo] = useState({ toName: "", toEmail: "", fromName: "" });
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
+  const top = useRef<HTMLDivElement>(null);
+
+  // Errors show at the top of the panel; bring them into view so nothing fails silently.
+  useEffect(() => { if (error) document.querySelector('[role="alert"]')?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [error]);
+  useEffect(() => { top.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [step]);
 
   // Fill in the default greeting until the person writes their own.
   useEffect(() => {
-    if (!messageEdited) setMessage(t.greet[occasion](recipient.trim()));
-  }, [lang, occasion, recipient, messageEdited, t]);
+    if (!messageEdited) setMessage(t.greet[occasion](toName.trim()));
+  }, [lang, occasion, toName, messageEdited, t]);
 
-  // Arriving from the 1-2-3 flow: start with the recipient and occasion already filled in.
+  // Arriving from the 1-2-3 flow: everything from "Who's it for?" is already filled in.
   useEffect(() => {
     try {
       const w = JSON.parse(sessionStorage.getItem(WIZARD_KEY) || "{}") as WizardState;
-      setWiz(w);
-      setSendTo({ toName: w.toName || "", toEmail: w.toEmail || "", fromName: w.fromName || "" });
-      if (w.toName && w.occasion && !new URLSearchParams(window.location.search).get("session_id")) {
-        setRecipient(w.toName);
-        setOccasion(videoOccasion(w.occasion));
-        setStep("write");
-      }
+      setToName(w.toName || ""); setFromName(w.fromName || "");
+      setToEmail(w.toEmail || ""); setToPhone(w.toPhone || "");
+      if (w.deliverBy === "text") setDeliverBy("text");
+      if (w.occasion && isCardOccasion(w.occasion)) { setCardOccasion(w.occasion); setOccasion(videoOccasion(w.occasion)); }
     } catch { /* no saved flow */ }
   }, []);
 
-  async function emailVideo() {
-    if (!sessionId) return;
-    if (!sendTo.toName.trim() || !sendTo.fromName.trim()) return setError(st.namesNeeded);
-    if (!isEmail(sendTo.toEmail.trim())) return setError(st.emailInvalid);
-    setSending(true); setError(null);
-    try {
-      const res = await fetch("/api/send-video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, ...sendTo, lang, occasion: wiz.occasion }) });
-      const d = (await res.json()) as { sent?: boolean; toEmail?: string; error?: string };
-      if (!res.ok || !d.sent) throw new Error(d.error || st.error);
-      setSentTo(d.toEmail || sendTo.toEmail);
-    } catch (e) { setError((e as Error).message); }
-    finally { setSending(false); }
-  }
-
-  // Coming back from Stripe.
+  // Coming back from Stripe: confirm payment and deliver.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sid = params.get("session_id");
-    const cancelled = params.get("status") === "cancelled";
     const saved = load();
     if (saved && isLang(saved.lang)) setLang(saved.lang);
     if (sid) {
       window.history.replaceState(null, "", "/video");
+      setSessionId(sid);
       setStep("checking");
-      fetch(`/api/unlock?session_id=${encodeURIComponent(sid)}`)
-        .then((r) => r.json())
-        .then((d: { paid?: boolean; videoUrl?: string }) => {
-          if (d.paid && d.videoUrl) {
-            setVideoUrl(d.videoUrl);
-            setSessionId(sid);
-            setStep("paid");
-          } else {
-            setError(STRINGS[saved?.lang && isLang(saved.lang) ? saved.lang : "en"].notPaid);
-            if (saved) restorePreview(saved);
-            else setStep("occasion");
-          }
-        })
-        .catch(() => {
-          setError(STRINGS[saved?.lang && isLang(saved.lang) ? saved.lang : "en"].notPaid);
-          setStep(saved ? "preview" : "occasion");
-        });
-    } else if (cancelled && saved) {
+      deliver(sid);
+    } else if (params.get("status") === "cancelled" && saved) {
       window.history.replaceState(null, "", "/video");
-      restorePreview(saved);
+      setRequestId(saved.requestId); setVideoUrl(saved.videoUrl); setStep(3);
       setNotice(STRINGS[isLang(saved.lang) ? saved.lang : "en"].cancelled);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function restorePreview(saved: { requestId: string; videoUrl: string }) {
-    setRequestId(saved.requestId);
-    setVideoUrl(saved.videoUrl);
-    setStep("preview");
+  async function deliver(sid: string, recipient?: { toName: string; toEmail: string; fromName: string }) {
+    setError(null);
+    try {
+      const res = await fetch("/api/send-video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: sid, lang, ...recipient }) });
+      const d = (await res.json()) as Delivery & { paid?: boolean; videoUrl?: string };
+      if (d.paid === false) {
+        const saved = load();
+        setError(STRINGS[saved?.lang && isLang(saved.lang) ? saved.lang : "en"].notPaid);
+        if (saved) { setRequestId(saved.requestId); setVideoUrl(saved.videoUrl); setStep(3); } else setStep(1);
+        return;
+      }
+      if (d.videoUrl) setVideoUrl(d.videoUrl);
+      setDelivery(d);
+      setStep("done");
+      if (d.sent) try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* ignore */ }
+    } catch (e) {
+      setDelivery({ sent: false, error: (e as Error).message });
+      setStep("done");
+    }
   }
 
   // Poll while the video renders.
@@ -169,37 +158,23 @@ export default function CinegramApp() {
     let stopped = false;
     const tick = async () => {
       if (stopped) return;
-      if (Date.now() - started > GIVE_UP_MS) {
-        setError(t.error);
-        setStep("capture");
-        return;
-      }
+      if (Date.now() - started > GIVE_UP_MS) { setError(t.error); setStep(2); return; }
       try {
-        const s = (await (await fetch(`/api/status?id=${encodeURIComponent(requestId)}`)).json()) as
-          { state: string; videoUrl?: string; error?: string };
+        const s = (await (await fetch(`/api/status?id=${encodeURIComponent(requestId)}`)).json()) as { state: string; videoUrl?: string; error?: string };
         if (stopped) return;
         if (s.state === "done" && s.videoUrl) {
           setVideoUrl(s.videoUrl);
           save({ lang, requestId, videoUrl: s.videoUrl });
-          setStep("preview");
+          setStep(3);
           return;
         }
-        if (s.state === "failed") {
-          setError(`${t.error} ${s.error || ""}`.trim());
-          setStep("capture");
-          return;
-        }
+        if (s.state === "failed") { setError(`${t.error} ${s.error || ""}`.trim()); setStep(2); return; }
         setPhase(s.state === "queued" ? "queue" : "render");
-      } catch {
-        /* network blip: keep polling */
-      }
+      } catch { /* network blip: keep polling */ }
       setTimeout(tick, POLL_MS);
     };
     const first = setTimeout(tick, POLL_MS);
-    return () => {
-      stopped = true;
-      clearTimeout(first);
-    };
+    return () => { stopped = true; clearTimeout(first); };
   }, [step, requestId, lang, t]);
 
   // Recording timer, with an automatic stop at the limit.
@@ -220,20 +195,24 @@ export default function CinegramApp() {
   // Load the ready-made voice samples the first time someone opens that tab.
   useEffect(() => {
     if (voiceMode !== "preset" || previews) return;
-    fetch("/api/voices")
-      .then((r) => r.json())
-      .then((d: { previews?: Record<string, string> }) => setPreviews(d.previews || {}))
-      .catch(() => setPreviews({}));
+    fetch("/api/voices").then((r) => r.json()).then((d: { previews?: Record<string, string> }) => setPreviews(d.previews || {})).catch(() => setPreviews({}));
   }, [voiceMode, previews]);
+
+  function go(s: Step) { setError(null); setNotice(null); setStep(s); }
+
+  function nextFromMessage() {
+    if (!toName.trim() || !fromName.trim()) return setError(st.namesNeeded);
+    if (deliverBy === "email" && !isEmail(toEmail.trim())) return setError(st.emailInvalid);
+    if (deliverBy === "text" && toPhone.trim() && !isPhone(toPhone)) return setError(tx.phoneInvalid);
+    if (!message.trim()) return;
+    go(2);
+  }
 
   function togglePreview(id: string) {
     const url = previews?.[id];
     if (!url) return;
     player.current?.pause();
-    if (playing === id) {
-      setPlaying(null);
-      return;
-    }
+    if (playing === id) { setPlaying(null); return; }
     const a = new Audio(url);
     a.onended = () => setPlaying(null);
     player.current = a;
@@ -250,10 +229,7 @@ export default function CinegramApp() {
 
   function setVoiceBlob(b: Blob | null) {
     setVoice(b);
-    setVoicePreview((old) => {
-      if (old) URL.revokeObjectURL(old);
-      return b ? URL.createObjectURL(b) : null;
-    });
+    setVoicePreview((old) => { if (old) URL.revokeObjectURL(old); return b ? URL.createObjectURL(b) : null; });
   }
 
   async function startRec() {
@@ -263,9 +239,7 @@ export default function CinegramApp() {
       recorder.current = await startRecording();
       setRecSeconds(0);
       setRecording(true);
-    } catch {
-      setError(t.micDenied);
-    }
+    } catch { setError(t.micDenied); }
   }
 
   async function stopRec() {
@@ -279,15 +253,10 @@ export default function CinegramApp() {
   async function acceptSample(raw: Blob) {
     try {
       const { wav, seconds } = await toWav(raw);
-      if (seconds < MIN_SECONDS) {
-        setError(t.tooShort);
-        return;
-      }
+      if (seconds < MIN_SECONDS) { setError(t.tooShort); return; }
       setError(null);
       setVoiceBlob(wav);
-    } catch {
-      setError(t.error);
-    }
+    } catch { setError(t.error); }
   }
 
   async function onPhoto(file: File | undefined) {
@@ -296,21 +265,15 @@ export default function CinegramApp() {
     try {
       const small = await shrinkPhoto(file);
       setPhoto(small);
-      setPhotoPreview((old) => {
-        if (old) URL.revokeObjectURL(old);
-        return URL.createObjectURL(small);
-      });
-    } catch (e) {
-      setError((e as Error).message);
-    }
+      setPhotoPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(small); });
+    } catch (e) { setError((e as Error).message); }
   }
 
   async function generate() {
     const hasVoice = voiceMode === "preset" || !!voice;
     if (!photo || !hasVoice || !consent) return;
     player.current?.pause();
-    setError(null);
-    setNotice(null);
+    setError(null); setNotice(null);
     setPhase("upload");
     setStep("working");
     const form = new FormData();
@@ -331,168 +294,159 @@ export default function CinegramApp() {
       setPhase("queue");
     } catch (e) {
       setError((e as Error).message);
-      setStep("capture");
-    } finally {
-      clearTimeout(cloneTimer);
-    }
+      setStep(2);
+    } finally { clearTimeout(cloneTimer); }
   }
 
-  async function checkout() {
+  async function payAndSend() {
     if (!requestId) return;
-    setBusy(true);
-    setError(null);
+    if (!toName.trim() || !fromName.trim()) { setError(st.namesNeeded); setStep(1); return; }
+    setBusy(true); setError(null);
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId }),
+        body: JSON.stringify({
+          requestId, lang, occasion: cardOccasion || CARD_OCCASION[occasion],
+          toName: toName.trim(), fromName: fromName.trim(), deliverBy, toEmail: toEmail.trim(), toPhone: toPhone.trim(),
+        }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
       if (!data.url) throw new Error(data.error || t.error);
       window.location.href = data.url;
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
+    } catch (e) { setError((e as Error).message); setBusy(false); }
   }
 
   function startOver() {
-    setStep("occasion");
-    setRequestId(null);
-    setVideoUrl(null);
-    setSessionId(null);
-    setError(null);
-    setNotice(null);
-    setBusy(false);
+    try { sessionStorage.removeItem(SAVE_KEY); } catch { /* ignore */ }
+    setStep(1); setRequestId(null); setVideoUrl(null); setSessionId(null); setDelivery(null);
+    setError(null); setNotice(null); setBusy(false);
   }
 
   const phaseText = { upload: t.sUpload, clone: t.sClone, queue: t.sQueue, render: t.sRender }[phase];
-  const canGenerate = !!photo && (voiceMode === "preset" || !!voice) && consent && !recording && message.trim().length > 0;
+  const canGenerate = !!photo && (voiceMode === "preset" || !!voice) && consent && !recording;
+  const stepIdx = step === 1 ? 1 : step === 2 || step === "working" ? 2 : 3;
 
   return (
     <main className="page font-sans">
       <SiteHeader lang={lang} setLang={setLang} active="video" />
+      <div ref={top} className="scroll-mt-4" />
+
+      {step !== "done" && step !== "checking" && (
+        <ol className="mx-auto mb-5 flex max-w-xl items-center justify-center gap-2" aria-label="Progress">
+          {vf.steps.map((label, i) => {
+            const n = i + 1, on = n === stepIdx, done = n < stepIdx;
+            return (
+              <li key={label} className="flex items-center gap-2">
+                <span aria-current={on ? "step" : undefined} className={`flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 text-sm font-semibold ${on ? "bg-white text-slate-900" : done ? "bg-white/10 text-white" : "bg-white/5 text-white/40"}`}>
+                  <span className={`grid h-6 w-6 place-items-center rounded-full text-xs ${on ? "bg-pink-500 text-white" : done ? "bg-emerald-500 text-white" : "bg-white/10"}`}>{done ? <Check className="h-3.5 w-3.5" /> : n}</span>
+                  <span className="hidden sm:inline">{label}</span>
+                </span>
+                {n < 3 && <span aria-hidden className="h-px w-4 bg-white/15" />}
+              </li>
+            );
+          })}
+        </ol>
+      )}
 
       <div className="panel max-w-xl p-6 sm:p-8">
-        {error && (
-          <p role="alert" className="mb-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p role="status" className="mb-5 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">
-            {notice}
-          </p>
-        )}
+        {error && <p role="alert" className="alert mb-5">{error}</p>}
+        {notice && <p role="status" className="notice mb-5">{notice}</p>}
 
-        {step === "lang" && (
-          <div className="space-y-6 text-center">
-            <p className="text-sm font-semibold text-pink-300">{t.tagline}</p>
-            <h2 className="text-2xl font-black">{t.chooseLanguage}</h2>
-            <p className="text-white/55 text-sm">{t.chooseLanguageSub}</p>
+        {/* ---------- 1. Who and what ---------- */}
+        {step === 1 && (
+          <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); nextFromMessage(); }}>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-pink-300">{t.tagline}</p>
+              <h2 className="mt-1 text-2xl font-bold">{vf.s1Title}</h2>
+            </div>
+
+            <div>
+              <span className="label">{vf.occasionLabel}</span>
+              <div className="grid grid-cols-4 gap-2">
+                {OCCASIONS.map(({ id, icon: Icon }) => (
+                  <button key={id} type="button" aria-pressed={occasion === id} onClick={() => { setOccasion(id); setCardOccasion(null); }}
+                    className={`flex flex-col items-center gap-1 rounded-2xl border p-2 text-xs font-semibold transition ${occasion === id ? "border-pink-300 bg-white text-slate-900" : "border-white/15 bg-white/5 text-white/80 hover:bg-white/10"}`}>
+                    <Icon className="h-5 w-5" /> <span className="leading-tight">{t.occ[id]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
-              {LANGUAGES.map((l) => (
-                <button
-                  key={l.code}
-                  onClick={() => { setLang(l.code); setStep("occasion"); }}
-                  className="p-4 bg-white/5 hover:bg-gradient-to-r hover:from-purple-600 hover:to-pink-600 rounded-2xl font-bold text-base transition border border-white/10"
-                >
-                  {l.label}
-                </button>
-              ))}
+              <label className="block"><span className="label">{st.toName}</span>
+                <input className="field" value={toName} maxLength={60} placeholder={st.toNamePh} onChange={(e) => setToName(e.target.value)} autoComplete="off" />
+              </label>
+              <label className="block"><span className="label">{st.fromName}</span>
+                <input className="field" value={fromName} maxLength={60} placeholder={st.fromNamePh} onChange={(e) => setFromName(e.target.value)} autoComplete="given-name" />
+              </label>
             </div>
-          </div>
-        )}
 
-        {step === "occasion" && (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black">{t.pickOccasion}</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {OCCASIONS.map(({ id, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => { setOccasion(id); setStep("write"); }}
-                  className="p-5 bg-white/5 hover:bg-pink-600/30 hover:border-pink-500/50 rounded-2xl flex flex-col items-center gap-3 transition border border-white/10 group"
-                >
-                  <Icon className="w-10 h-10 text-pink-400 group-hover:scale-110 transition" />
-                  <span className="font-bold text-sm">{t.occ[id]}</span>
-                </button>
-              ))}
+            <div>
+              <span className="label">{tx.howLabel}</span>
+              <div role="radiogroup" aria-label={tx.howLabel} className="grid grid-cols-2 gap-2">
+                {(["email", "text"] as const).map((m) => (
+                  <button key={m} type="button" role="radio" aria-checked={deliverBy === m} onClick={() => { setDeliverBy(m); setError(null); }}
+                    className={`flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border px-3 text-sm font-semibold transition ${deliverBy === m ? "border-pink-300 bg-white text-slate-900" : "border-white/15 bg-white/5 text-white/80 hover:bg-white/10"}`}>
+                    {m === "email" ? <Mail className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />} {m === "email" ? tx.byEmail : tx.byText}
+                  </button>
+                ))}
+              </div>
             </div>
-            <a href={`/?lang=${lang}`} className="btn-ghost">{t.back}</a>
-          </div>
-        )}
+            {deliverBy === "email" ? (
+              <label className="block"><span className="label">{st.toEmail}</span>
+                <input className="field" type="email" inputMode="email" autoCapitalize="off" autoComplete="off" value={toEmail} onChange={(e) => setToEmail(e.target.value)} placeholder={st.toEmailPh} />
+              </label>
+            ) : (
+              <label className="block"><span className="label">{tx.toPhone}</span>
+                <input className="field" type="tel" inputMode="tel" autoComplete="off" value={toPhone} onChange={(e) => setToPhone(e.target.value)} placeholder={tx.toPhonePh} maxLength={30} />
+              </label>
+            )}
 
-        {step === "write" && (
-          <div className="space-y-5">
-            <h2 className="text-2xl font-black text-center">{t.writeTitle}</h2>
-            <label className="block space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-white/55">{t.recipient}</span>
-              <input
-                value={recipient}
-                maxLength={40}
-                placeholder={t.recipientPh}
-                onChange={(e) => setRecipient(e.target.value)}
-                className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-sm focus:outline-none focus:border-pink-500"
-              />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-white/55">{t.message}</span>
-              <textarea
-                rows={4}
-                value={message}
-                maxLength={MAX_MESSAGE}
-                onChange={(e) => { setMessage(e.target.value); setMessageEdited(true); }}
-                className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-sm focus:outline-none focus:border-pink-500"
-              />
-              <span className="flex justify-between gap-3 text-xs text-white/55">
+            <label className="block"><span className="label">{t.message}</span>
+              <textarea rows={4} value={message} maxLength={MAX_MESSAGE} onChange={(e) => { setMessage(e.target.value); setMessageEdited(true); }} className="field" />
+              <span className="mt-1 flex justify-between gap-3 text-xs text-white/55">
                 <span>{t.messageHint}</span>
-                <span className="tabular-nums shrink-0">{message.length}/{MAX_MESSAGE}</span>
+                <span className="shrink-0 tabular-nums">{message.length}/{MAX_MESSAGE}</span>
               </span>
             </label>
-            <label className="block space-y-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-white/55">{t.scene}</span>
-              <textarea
-                rows={2}
-                value={scene}
-                maxLength={300}
-                placeholder={t.scenePh}
-                onChange={(e) => setScene(e.target.value)}
-                className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-sm focus:outline-none focus:border-pink-500"
-              />
-            </label>
-            <button disabled={!message.trim()} onClick={() => setStep("capture")} className={BTN_MAIN}>{t.next}</button>
-            <button onClick={() => setStep("occasion")} className="block mx-auto text-xs text-white/55 hover:text-white">{t.back}</button>
-          </div>
+
+            {showScene ? (
+              <label className="block"><span className="label">{t.scene}</span>
+                <textarea rows={2} value={scene} maxLength={300} placeholder={t.scenePh} onChange={(e) => setScene(e.target.value)} className="field" />
+              </label>
+            ) : (
+              <button type="button" onClick={() => setShowScene(true)} className="text-sm font-semibold text-pink-300 hover:text-pink-200">{vf.addScene}</button>
+            )}
+
+            <button type="submit" disabled={!message.trim()} className="btn-primary">{vf.next}</button>
+            <a href={`/?lang=${lang}`} className="btn-ghost">{st.back}</a>
+          </form>
         )}
 
-        {step === "capture" && (
+        {/* ---------- 2. Face and voice ---------- */}
+        {step === 2 && (
           <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black">{t.faceTitle}</h2>
+            <h2 className="text-2xl font-bold">{vf.s2Title}</h2>
 
-            <label className="cursor-pointer border-2 border-dashed border-white/15 hover:border-pink-500 rounded-2xl p-5 flex flex-col items-center justify-center bg-black/40/50 transition">
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/15 bg-black/30 p-5 transition hover:border-pink-500">
               {photoPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoPreview} alt="" className="w-28 h-28 rounded-2xl object-cover mb-2" />
+                <img src={photoPreview} alt="" className="mb-2 h-28 w-28 rounded-2xl object-cover" />
               ) : (
-                <Upload className="w-8 h-8 text-pink-400 mb-2" />
+                <Upload className="mb-2 h-8 w-8 text-pink-400" />
               )}
               <span className="text-sm font-semibold">{t.photo}</span>
-              <span className="text-xs text-white/55 mt-1">{t.photoTip}</span>
+              <span className="mt-1 text-xs text-white/55">{t.photoTip}</span>
               <input type="file" accept="image/*" className="hidden" onChange={(e) => onPhoto(e.target.files?.[0])} />
             </label>
 
             <div className="space-y-3 text-left">
-              <p className="text-xs font-bold uppercase tracking-wider text-white/55">{t.voiceChoice}</p>
-              <div role="tablist" className="grid grid-cols-2 gap-1 rounded-2xl bg-black/30 border border-white/10 p-1">
+              <p className="label">{t.voiceChoice}</p>
+              <div role="tablist" className="grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-black/30 p-1">
                 {(["mine", "preset"] as const).map((m) => (
-                  <button
-                    key={m}
-                    role="tab"
-                    aria-selected={voiceMode === m}
-                    onClick={() => chooseVoiceMode(m)}
-                    className={`py-2.5 rounded-xl text-sm font-bold transition ${voiceMode === m ? "bg-purple-600 text-white" : "text-white/55 hover:text-white"}`}
-                  >
+                  <button key={m} role="tab" aria-selected={voiceMode === m} onClick={() => chooseVoiceMode(m)}
+                    className={`rounded-xl py-2.5 text-sm font-bold transition ${voiceMode === m ? "bg-purple-600 text-white" : "text-white/55 hover:text-white"}`}>
                     {m === "mine" ? t.myVoice : t.pickVoice}
                   </button>
                 ))}
@@ -506,25 +460,12 @@ export default function CinegramApp() {
                   {PRESET_VOICES.map((v) => {
                     const chosen = presetVoice === v.id;
                     return (
-                      <div
-                        key={v.id}
-                        className={`flex items-center gap-2 rounded-2xl border p-2 transition ${chosen ? "border-pink-500 bg-pink-600/15" : "border-white/10 bg-black/40"}`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => togglePreview(v.id)}
-                          disabled={!previews?.[v.id]}
-                          aria-label={`${t.voices[v.key]} ▶`}
-                          className="shrink-0 w-9 h-9 rounded-full bg-white/5 flex items-center justify-center disabled:opacity-30"
-                        >
-                          {playing === v.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      <div key={v.id} className={`flex items-center gap-2 rounded-2xl border p-2 transition ${chosen ? "border-pink-500 bg-pink-600/15" : "border-white/10 bg-black/40"}`}>
+                        <button type="button" onClick={() => togglePreview(v.id)} disabled={!previews?.[v.id]} aria-label={`${t.voices[v.key]} ▶`}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5 disabled:opacity-30">
+                          {playing === v.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setPresetVoice(v.id)}
-                          aria-pressed={chosen}
-                          className="flex-1 min-w-0 text-left text-sm font-semibold leading-tight py-1"
-                        >
+                        <button type="button" onClick={() => setPresetVoice(v.id)} aria-pressed={chosen} className="min-w-0 flex-1 py-1 text-left text-sm font-semibold leading-tight">
                           {t.voices[v.key]}
                         </button>
                       </div>
@@ -533,131 +474,126 @@ export default function CinegramApp() {
                 </div>
               </div>
             ) : (
-            <div className="space-y-3 text-left">
-              <p className="text-xs font-bold uppercase tracking-wider text-white/55">{t.voiceTip}</p>
-              <p className="rounded-2xl bg-black/30 border border-white/10 p-4 text-sm leading-relaxed">{t.script}</p>
-              {!recording ? (
-                <button
-                  onClick={startRec}
-                  className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition ${voice ? "bg-emerald-600" : "bg-purple-600 hover:bg-purple-500"}`}
-                >
-                  {voice ? <RotateCcw className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {voice ? `${t.voiceReady} · ${t.redo}` : t.record}
-                </button>
-              ) : (
-                <button onClick={stopRec} className="w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 bg-red-600 animate-pulse">
-                  <Square className="w-5 h-5" /> {t.recording} {recSeconds}s / {MAX_SECONDS}s · {t.stop}
-                </button>
-              )}
-              {voicePreview && !recording && <audio src={voicePreview} controls className="w-full" />}
-              <label className="block text-center text-xs text-white/55 underline cursor-pointer">
-                {t.uploadVoice}
-                <input
-                  type="file"
-                  accept="audio/*"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) acceptSample(f); }}
-                />
-              </label>
-            </div>
+              <div className="space-y-3 text-left">
+                <p className="label">{t.voiceTip}</p>
+                <p className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-relaxed">{t.script}</p>
+                {!recording ? (
+                  <button onClick={startRec} className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 font-bold transition ${voice ? "bg-emerald-600" : "bg-purple-600 hover:bg-purple-500"}`}>
+                    {voice ? <RotateCcw className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                    {voice ? `${t.voiceReady} · ${t.redo}` : t.record}
+                  </button>
+                ) : (
+                  <button onClick={stopRec} className="flex w-full animate-pulse items-center justify-center gap-2 rounded-2xl bg-red-600 py-4 font-bold">
+                    <Square className="h-5 w-5" /> {t.recording} {recSeconds}s / {MAX_SECONDS}s · {t.stop}
+                  </button>
+                )}
+                {voicePreview && !recording && <audio src={voicePreview} controls className="w-full" />}
+                <label className="block cursor-pointer text-center text-xs text-white/55 underline">
+                  {t.uploadVoice}
+                  <input type="file" accept="audio/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) acceptSample(f); }} />
+                </label>
+              </div>
             )}
 
             <label className="flex items-start gap-3 text-left text-sm text-white/70">
-              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 w-4 h-4 accent-pink-500" />
+              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 h-4 w-4 accent-pink-500" />
               <span>{voiceMode === "preset" ? t.consentFace : t.consent}</span>
             </label>
 
-            <button
-              disabled={!canGenerate}
-              onClick={generate}
-              className="w-full py-4 bg-gradient-to-r from-amber-400 via-pink-500 to-purple-600 text-slate-950 font-black rounded-2xl text-lg disabled:opacity-50 hover:opacity-90 transition shadow-lg"
-            >
-              {t.generate}
-            </button>
-            <button onClick={() => setStep("write")} className="text-xs text-white/55 hover:text-white">{t.back}</button>
+            <button disabled={!canGenerate} onClick={generate} className="btn-primary">{vf.make}</button>
+            <button onClick={() => go(1)} className="btn-ghost">{st.back}</button>
           </div>
         )}
 
         {step === "working" && (
-          <div className="space-y-5 text-center py-6" role="status" aria-live="polite">
-            <Loader2 className="w-12 h-12 mx-auto text-pink-400 animate-spin" />
+          <div className="space-y-5 py-6 text-center" role="status" aria-live="polite">
+            <Loader2 className="mx-auto h-12 w-12 animate-spin text-pink-400" />
             <p className="text-lg font-bold">{phaseText}</p>
             <p className="text-sm text-white/55">{t.keepOpen}</p>
           </div>
         )}
 
-        {step === "checking" && (
-          <div className="space-y-5 text-center py-6" role="status">
-            <Loader2 className="w-12 h-12 mx-auto text-emerald-400 animate-spin" />
-            <p className="text-lg font-bold">{t.checking}</p>
-          </div>
-        )}
-
-        {step === "preview" && videoUrl && (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black flex items-center justify-center gap-2">
-              <CheckCircle2 className="text-emerald-400 w-7 h-7" /> {t.readyTitle}
-            </h2>
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl bg-black" onContextMenu={(e) => e.preventDefault()}>
-              <video
-                src={videoUrl}
-                controls
-                autoPlay
-                playsInline
-                controlsList="nodownload noplaybackrate"
-                disablePictureInPicture
-                className="w-full max-h-[70vh] object-contain"
-              />
-              <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="-rotate-12 text-2xl sm:text-3xl font-black tracking-widest text-white/35 select-none">{t.watermark}</span>
+        {/* ---------- 3. Preview, pay and send ---------- */}
+        {step === 3 && videoUrl && (
+          <div className="space-y-5 text-center">
+            <h2 className="flex items-center justify-center gap-2 text-2xl font-bold"><CheckCircle2 className="h-7 w-7 text-emerald-400" /> {vf.s3Title}</h2>
+            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl" onContextMenu={(e) => e.preventDefault()}>
+              <video src={videoUrl} controls autoPlay playsInline controlsList="nodownload noplaybackrate" disablePictureInPicture className="max-h-[70vh] w-full object-contain" />
+              {/* Light watermark tiled across the whole frame, so screenshots and screen recordings stay marked. */}
+              <div aria-hidden className="pointer-events-none absolute inset-0 flex select-none flex-col justify-around overflow-hidden">
+                {[0, 1, 2, 3, 4].map((r) => (
+                  <span key={r} className={`-rotate-12 whitespace-nowrap text-lg font-black tracking-widest text-white/20 ${r % 2 ? "translate-x-16" : "-translate-x-8"}`}>
+                    {t.watermark} · {t.watermark} · {t.watermark}
+                  </span>
+                ))}
               </div>
             </div>
-            <p className="text-xs text-white/55">{t.previewNote}</p>
+            <p className="text-xs text-white/55">{vf.previewNote}</p>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-left text-sm text-white/75">
+              {deliverBy === "text"
+                ? <p className="flex items-center gap-2"><MessageSquare className="h-4 w-4 shrink-0 text-pink-300" /> {tx.willText(toName.trim() || "…")}</p>
+                : <p className="flex items-center gap-2"><Mail className="h-4 w-4 shrink-0 text-pink-300" /> {st.willEmail(toEmail.trim())}</p>}
+            </div>
+            <button onClick={payAndSend} disabled={busy} className="btn-primary">
+              {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CreditCard className="h-5 w-5" />} {vf.pay(toName.trim() || "…")}
+            </button>
+            <p className="text-center text-xs text-white/40">{st.secure}</p>
             <p className="text-center text-xs text-white/40">{FINAL_SALE[lang]}</p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={checkout}
-                disabled={busy}
-                className="w-full py-4 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black rounded-2xl text-base flex items-center justify-center gap-2 shadow-lg hover:opacity-90 transition disabled:opacity-60"
-              >
-                {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />} {t.buy}
-              </button>
-              <button onClick={startOver} className="text-xs text-white/55 hover:text-white transition">{t.another}</button>
-            </div>
+            <button onClick={startOver} className="btn-ghost"><RotateCcw className="h-4 w-4" /> {st.another}</button>
           </div>
         )}
 
-        {step === "paid" && videoUrl && sessionId && (
-          <div className="space-y-6 text-center">
-            <h2 className="text-2xl font-black flex items-center justify-center gap-2">
-              <CheckCircle2 className="text-emerald-400 w-7 h-7" /> {t.paidTitle}
-            </h2>
-            <div className="overflow-hidden rounded-2xl border border-white/10 shadow-2xl bg-black">
-              <video src={videoUrl} controls autoPlay playsInline className="w-full max-h-[70vh] object-contain" />
-            </div>
-            {sentTo ? (
-              <p className="rounded-2xl border border-emerald-400/40 bg-emerald-400/10 p-3 font-semibold text-emerald-100">💌 {st.vSent(sentTo)}</p>
+        {step === "checking" && (
+          <div className="space-y-5 py-6 text-center" role="status">
+            <Loader2 className="mx-auto h-12 w-12 animate-spin text-emerald-400" />
+            <p className="text-lg font-bold">{vf.sendingNow}</p>
+          </div>
+        )}
+
+        {/* ---------- Done ---------- */}
+        {step === "done" && delivery && (
+          <div className="space-y-5 text-center">
+            {delivery.sent && delivery.byText && delivery.link ? (
+              <ShareCard lang={lang} toName={delivery.toName || ""} fromName={delivery.fromName || ""} toPhone={delivery.toPhone} link={delivery.link} onAnother={startOver} />
+            ) : delivery.sent ? (
+              <>
+                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-pink-500 to-amber-400 text-4xl shadow-xl shadow-pink-500/30">💌</div>
+                <h2 className="title-serif text-4xl font-semibold text-amber-50">{st.sentTitle(delivery.toName || "")}</h2>
+                <p className="text-white/70">{st.sentBody(delivery.toEmail || "")}</p>
+                {delivery.link && <a href={delivery.link} target="_blank" rel="noopener noreferrer" className="btn-secondary"><CheckCircle2 className="h-5 w-5" /> {st.viewCard}</a>}
+                <button onClick={startOver} className="btn-primary"><RotateCcw className="h-5 w-5" /> {st.another}</button>
+              </>
+            ) : delivery.needRecipient && sessionId ? (
+              <OldSessionForm lang={lang} onSend={(r) => deliver(sessionId, r)} error={delivery.error} />
             ) : (
-              <div className="space-y-3 text-left">
-                <label className="block"><span className="label">{st.toName}</span><input className="field" value={sendTo.toName} maxLength={60} placeholder={st.toNamePh} onChange={(e) => setSendTo({ ...sendTo, toName: e.target.value })} /></label>
-                <label className="block"><span className="label">{st.vEmailLabel}</span><input className="field" type="email" inputMode="email" autoComplete="off" value={sendTo.toEmail} placeholder={st.toEmailPh} onChange={(e) => setSendTo({ ...sendTo, toEmail: e.target.value })} /></label>
-                <label className="block"><span className="label">{st.fromName}</span><input className="field" value={sendTo.fromName} maxLength={60} placeholder={st.fromNamePh} onChange={(e) => setSendTo({ ...sendTo, fromName: e.target.value })} /></label>
-                <button onClick={emailVideo} disabled={sending} className="btn-primary">{sending ? <Loader2 className="w-5 h-5 animate-spin" /> : "💌"} {st.vSendTo(sendTo.toName.trim() || "…")}</button>
-              </div>
+              <>
+                <p className="text-lg font-bold">{st.notSent}</p>
+                {delivery.error && <p className="alert">{delivery.error}</p>}
+                {sessionId && <button onClick={() => { setStep("checking"); deliver(sessionId); }} className="btn-primary"><RotateCcw className="h-5 w-5" /> {st.retry}</button>}
+                {delivery.link && <a href={delivery.link} target="_blank" rel="noopener noreferrer" className="btn-secondary">{st.viewCard}</a>}
+              </>
             )}
-            <div className="flex flex-col gap-3">
-              <a
-                href={`/api/download?session_id=${encodeURIComponent(sessionId)}`}
-                className="w-full py-4 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black rounded-2xl text-base flex items-center justify-center gap-2 shadow-lg hover:opacity-90 transition"
-              >
-                <Download className="w-5 h-5" /> {t.download}
-              </a>
-              <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-white/70 underline">{t.openVideo}</a>
-              <button onClick={startOver} className="text-xs text-white/55 hover:text-white transition">{t.another}</button>
-            </div>
+            {sessionId && (delivery.sent || delivery.needRecipient) && (
+              <a href={`/api/download?session_id=${encodeURIComponent(sessionId)}`} className="btn-ghost"><Download className="h-4 w-4" /> {vf.saveCopy}</a>
+            )}
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+/** For payments made before the recipient was saved at checkout: ask who it's for, then email it. */
+function OldSessionForm({ lang, onSend, error }: { lang: Lang; onSend: (r: { toName: string; toEmail: string; fromName: string }) => void; error?: string }) {
+  const st = SITE[lang];
+  const [r, setR] = useState({ toName: "", toEmail: "", fromName: "" });
+  return (
+    <div className="space-y-3 text-left">
+      {error && <p className="alert">{error}</p>}
+      <label className="block"><span className="label">{st.toName}</span><input className="field" value={r.toName} maxLength={60} placeholder={st.toNamePh} onChange={(e) => setR({ ...r, toName: e.target.value })} /></label>
+      <label className="block"><span className="label">{st.vEmailLabel}</span><input className="field" type="email" inputMode="email" autoComplete="off" value={r.toEmail} placeholder={st.toEmailPh} onChange={(e) => setR({ ...r, toEmail: e.target.value })} /></label>
+      <label className="block"><span className="label">{st.fromName}</span><input className="field" value={r.fromName} maxLength={60} placeholder={st.fromNamePh} onChange={(e) => setR({ ...r, fromName: e.target.value })} /></label>
+      <button onClick={() => onSend(r)} className="btn-primary">💌 {st.vSendTo(r.toName.trim() || "…")}</button>
+    </div>
   );
 }

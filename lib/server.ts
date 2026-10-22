@@ -164,14 +164,14 @@ export const PRICE_CENTS = 299;
 // Cards are delivered the moment payment clears, so every sale is final.
 const FINAL_SALE_EN = "All sales are final. Your card is delivered instantly after payment, so it can't be refunded.";
 
-export async function stripeCreateCheckout(requestId: string, appUrl: string): Promise<string> {
+export async function stripeCreateCheckout(requestId: string, appUrl: string, toName?: string): Promise<{ url: string; id: string }> {
   const body = new URLSearchParams({
     mode: "payment",
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(PRICE_CENTS),
-    "line_items[0][price_data][product_data][name]": "Cinegram HD Video Card",
-    "line_items[0][price_data][product_data][description]": "Download your video card without the preview watermark",
+    "line_items[0][price_data][product_data][name]": "Cinegram Video Card",
+    "line_items[0][price_data][product_data][description]": toName ? `Your talking video card, sent to ${toName} as soon as payment completes` : "Your talking video card, without the preview watermark",
     "metadata[request_id]": requestId,
     "custom_text[submit][message]": FINAL_SALE_EN,
     success_url: `${appUrl}/video?session_id={CHECKOUT_SESSION_ID}`,
@@ -183,8 +183,8 @@ export async function stripeCreateCheckout(requestId: string, appUrl: string): P
     body,
   });
   if (!res.ok) await failText(res, "Checkout");
-  const data = (await res.json()) as { url: string };
-  return data.url;
+  const data = (await res.json()) as { url: string; id: string };
+  return { url: data.url, id: data.id };
 }
 
 /** Returns the paid card's request id, or null if the session isn't paid. */
