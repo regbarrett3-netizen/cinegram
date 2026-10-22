@@ -168,7 +168,7 @@ export default function SendFlow() {
           </>
         )}
 
-        {error && <p role="alert" className="alert mx-auto mb-5 max-w-xl">{error}</p>}
+        {error && step !== 4 && <p role="alert" className="alert mx-auto mb-5 max-w-xl">{error}</p>}
         {notice && <p role="status" className="notice mx-auto mb-5 max-w-xl">{notice}</p>}
 
         {/* ---------- 1. Occasion ---------- */}
@@ -301,6 +301,7 @@ export default function SendFlow() {
                 <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-pink-300" /> {t.willEmail(toEmail.trim())}</p>
               </div>
 
+              {error && <p role="alert" className="alert">{error}</p>}
               <button onClick={pay} disabled={busy || uploading || !toName.trim() || !fromName.trim()} className="btn-primary">
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />} {t.pay(priceLabel(PRICE[choice.kind]), toName.trim() || "…")}
               </button>

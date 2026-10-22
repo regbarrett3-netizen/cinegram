@@ -44,6 +44,8 @@ export function OccasionView({ occasion }: { occasion: CardOccasion }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Errors show above the card; bring them into view so a failed payment is never silent.
+  useEffect(() => { if (error) document.querySelector('[role="alert"]')?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [error]);
   const [canShare, setCanShare] = useState(false);
 
   // Coming back from Stripe: confirm the payment, or note the cancellation.

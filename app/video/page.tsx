@@ -79,6 +79,8 @@ export default function CinegramApp() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Errors show near the top; bring them into view so a failed payment is never silent.
+  useEffect(() => { if (error) document.querySelector('[role="alert"]')?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [error]);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [wiz, setWiz] = useState<WizardState>({});
