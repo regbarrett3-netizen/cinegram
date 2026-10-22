@@ -19,6 +19,8 @@ export type SentCard = {
   lang: string;
   to_name: string;
   to_email: string;
+  deliver_by: "email" | "text";
+  to_phone: string | null;
   from_name: string;
   photo_url: string | null;
   image_url: string | null;

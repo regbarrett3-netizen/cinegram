@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, CheckCircle2, ChevronRight, Loader2, Lock, Mail, RotateCcw, Sparkles, Trash2, Video, Volume2, VolumeX } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCircle2, ChevronRight, Copy, Loader2, Lock, Mail, MessageSquare, RotateCcw, Share2, Sparkles, Trash2, Video, Volume2, VolumeX } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
 import { useCardLang } from "../components/cards/useCardLang";
 import { CardCanvas } from "../components/cards/CardCanvas";
@@ -17,11 +17,12 @@ import { loadImage } from "../lib/polaroid";
 import { FINAL_SALE, OCCASION_ACTIONS, PRICE, WIZARD_KEY, actionTextFor, priceLabel, type WizardState } from "../lib/send";
 import { SITE } from "../lib/siteText";
 import { isEmail } from "../lib/emailCheck";
+import { TEXT_UI, isPhone, smsHref, type DeliverBy } from "../lib/textSend";
 
 type Step = 1 | 2 | 3 | 4 | "done";
 type Choice = { kind: "quick"; id: string } | { kind: "action"; id: ActionId };
-type Saved = WizardState & { choice?: Choice | null; photoUrl?: string | null };
-type Delivery = { state: "checking" | "sent" | "failed" | "unpaid"; toName?: string; toEmail?: string; link?: string; error?: string };
+type Saved = WizardState & { choice?: Choice | null; photoUrl?: string | null; deliverBy?: DeliverBy; toPhone?: string };
+type Delivery = { state: "checking" | "sent" | "failed" | "unpaid"; toName?: string; toEmail?: string; link?: string; error?: string; byText?: boolean; toPhone?: string; fromName?: string };
 
 function loadSaved(): Saved {
   try { return JSON.parse(sessionStorage.getItem(WIZARD_KEY) || "{}") as Saved; } catch { return {}; }
@@ -33,6 +34,7 @@ function persist(s: Saved) {
 export default function SendFlow() {
   const [lang, setLang] = useCardLang();
   const t = SITE[lang];
+  const tx = TEXT_UI[lang];
   const music = useCardMusic();
 
   const [step, setStep] = useState<Step>(1);
@@ -40,6 +42,9 @@ export default function SendFlow() {
   const [toName, setToName] = useState("");
   const [toEmail, setToEmail] = useState("");
   const [fromName, setFromName] = useState("");
+  const [deliverBy, setDeliverBy] = useState<DeliverBy>("email");
+  const [toPhone, setToPhone] = useState("");
+  const [copied, setCopied] = useState(false);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photo, setPhoto] = useState<HTMLImageElement | null>(null);
@@ -57,6 +62,8 @@ export default function SendFlow() {
     const s = loadSaved();
     if (s.occasion && isCardOccasion(s.occasion)) setOccasion(s.occasion);
     setToName(s.toName || ""); setToEmail(s.toEmail || ""); setFromName(s.fromName || "");
+    if (s.deliverBy === "text") setDeliverBy("text");
+    setToPhone(s.toPhone || "");
     if (s.choice) setChoice(s.choice);
     if (s.photoUrl) { setPhotoUrl(s.photoUrl); loadImage(s.photoUrl).then(setPhoto).catch(() => undefined); }
     const id = p.get("order"), sid = p.get("session_id");
@@ -69,8 +76,8 @@ export default function SendFlow() {
   }, []);
 
   useEffect(() => {
-    if (step !== "done") persist({ occasion: occasion || undefined, toName, toEmail, fromName, lang, choice, photoUrl });
-  }, [occasion, toName, toEmail, fromName, lang, choice, photoUrl, step]);
+    if (step !== "done") persist({ occasion: occasion || undefined, toName, toEmail, fromName, lang, choice, photoUrl, deliverBy, toPhone });
+  }, [occasion, toName, toEmail, fromName, lang, choice, photoUrl, step, deliverBy, toPhone]);
 
   useEffect(() => { top.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [step]);
   useEffect(() => { if (step !== 4) music.stop(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [step]);
@@ -79,7 +86,8 @@ export default function SendFlow() {
 
   function nextFromWho() {
     if (!toName.trim() || !fromName.trim()) return setError(t.namesNeeded);
-    if (!isEmail(toEmail.trim())) return setError(t.emailInvalid);
+    if (deliverBy === "email" && !isEmail(toEmail.trim())) return setError(t.emailInvalid);
+    if (deliverBy === "text" && !isPhone(toPhone)) return setError(tx.phoneInvalid);
     go(3);
   }
 
@@ -119,7 +127,7 @@ export default function SendFlow() {
         ? await cardJpeg({ artKey: choice.id, lang, to: names.to, from: names.from, fontFamily: CARD_FONT_FAMILY, photo })
         : await posterJpeg(choice.id, Math.max(POSTER_T[choice.id], 5.4), { lang, to: names.to, from: names.from, fontFamily: CARD_FONT_FAMILY, photo, text: actionTextFor(choice.id, occasion, lang) });
       const form = new FormData();
-      Object.entries({ kind: choice.kind, cardId: choice.id, occasion, lang, toName: names.to, toEmail: toEmail.trim(), fromName: names.from, photoUrl: photoUrl || "" }).forEach(([k, v]) => form.append(k, v));
+      Object.entries({ kind: choice.kind, cardId: choice.id, occasion, lang, toName: names.to, toEmail: toEmail.trim(), fromName: names.from, photoUrl: photoUrl || "", deliverBy, toPhone: toPhone.trim() }).forEach(([k, v]) => form.append(k, v));
       form.append("image", image, "card.jpg");
       const res = await fetch("/api/order", { method: "POST", body: form });
       const d = (await res.json()) as { url?: string; error?: string };
@@ -134,10 +142,10 @@ export default function SendFlow() {
     setDelivery({ state: "checking" });
     try {
       const res = await fetch("/api/deliver", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: o.id, sessionId: o.sessionId }) });
-      const d = (await res.json()) as { paid?: boolean; sent?: boolean; toName?: string; toEmail?: string; link?: string; error?: string };
+      const d = (await res.json()) as { paid?: boolean; sent?: boolean; toName?: string; toEmail?: string; link?: string; error?: string; byText?: boolean; toPhone?: string; fromName?: string };
       if (res.status === 402 || d.paid === false) return setDelivery({ state: "unpaid" });
       if (!res.ok) throw new Error(d.error || "error");
-      setDelivery({ state: d.sent ? "sent" : "failed", toName: d.toName, toEmail: d.toEmail, link: d.link, error: d.error });
+      setDelivery({ state: d.sent ? "sent" : "failed", toName: d.toName, toEmail: d.toEmail, link: d.link, error: d.error, byText: d.byText, toPhone: d.toPhone || undefined, fromName: d.fromName });
       if (d.sent) try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* ignore */ }
     } catch (e) { setDelivery({ state: "failed", error: (e as Error).message }); }
   }
@@ -145,7 +153,7 @@ export default function SendFlow() {
   function startOver() {
     try { sessionStorage.removeItem(WIZARD_KEY); } catch { /* ignore */ }
     window.history.replaceState(null, "", "/");
-    setOccasion(null); setToName(""); setToEmail(""); setChoice(null); setPhoto(null); setPhotoUrl(null); setDelivery(null);
+    setOccasion(null); setToName(""); setToEmail(""); setToPhone(""); setDeliverBy("email"); setCopied(false); setChoice(null); setPhoto(null); setPhotoUrl(null); setDelivery(null);
     go(1);
   }
 
@@ -201,9 +209,26 @@ export default function SendFlow() {
               <label className="block"><span className="label">{t.toName}</span>
                 <input className="field" value={toName} onChange={(e) => setToName(e.target.value)} maxLength={60} placeholder={t.toNamePh} autoComplete="off" autoFocus />
               </label>
-              <label className="block"><span className="label">{t.toEmail}</span>
-                <input className="field" type="email" inputMode="email" autoCapitalize="off" autoComplete="off" value={toEmail} onChange={(e) => setToEmail(e.target.value)} placeholder={t.toEmailPh} />
-              </label>
+              <div>
+                <span className="label">{tx.howLabel}</span>
+                <div role="radiogroup" aria-label={tx.howLabel} className="grid grid-cols-2 gap-2">
+                  {(["email", "text"] as const).map((m) => (
+                    <button key={m} type="button" role="radio" aria-checked={deliverBy === m} onClick={() => { setDeliverBy(m); setError(null); }}
+                      className={`flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border px-3 text-sm font-semibold transition ${deliverBy === m ? "border-pink-300 bg-white text-slate-900" : "border-white/15 bg-white/5 text-white/80 hover:bg-white/10"}`}>
+                      {m === "email" ? <Mail className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />} {m === "email" ? tx.byEmail : tx.byText}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {deliverBy === "email" ? (
+                <label className="block"><span className="label">{t.toEmail}</span>
+                  <input className="field" type="email" inputMode="email" autoCapitalize="off" autoComplete="off" value={toEmail} onChange={(e) => setToEmail(e.target.value)} placeholder={t.toEmailPh} />
+                </label>
+              ) : (
+                <label className="block"><span className="label">{tx.toPhone}</span>
+                  <input className="field" type="tel" inputMode="tel" autoComplete="off" value={toPhone} onChange={(e) => setToPhone(e.target.value)} placeholder={tx.toPhonePh} maxLength={30} />
+                </label>
+              )}
               <label className="block"><span className="label">{t.fromName}</span>
                 <input className="field" value={fromName} onChange={(e) => setFromName(e.target.value)} maxLength={60} placeholder={t.fromNamePh} autoComplete="given-name" />
               </label>
@@ -298,7 +323,9 @@ export default function SendFlow() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
-                <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-pink-300" /> {t.willEmail(toEmail.trim())}</p>
+                {deliverBy === "text"
+                  ? <p className="flex items-center gap-2"><MessageSquare className="h-4 w-4 shrink-0 text-pink-300" /> {tx.willText(toName.trim() || "…")}</p>
+                  : <p className="flex items-center gap-2"><Mail className="h-4 w-4 shrink-0 text-pink-300" /> {t.willEmail(toEmail.trim())}</p>}
               </div>
 
               {error && <p role="alert" className="alert">{error}</p>}
@@ -318,7 +345,21 @@ export default function SendFlow() {
             {(!delivery || delivery.state === "checking") && (
               <div className="space-y-4 py-6"><Loader2 className="mx-auto h-10 w-10 animate-spin text-pink-300" /><p className="text-lg font-bold">{t.sending}</p></div>
             )}
-            {delivery?.state === "sent" && (
+            {delivery?.state === "sent" && delivery.byText && delivery.link && (
+              <div className="space-y-5">
+                <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-pink-500 to-amber-400 text-4xl shadow-xl shadow-pink-500/30">💌</div>
+                <h2 className="title-serif text-4xl font-semibold text-amber-50">{tx.readyTitle(delivery.toName || "")}</h2>
+                <p className="text-white/70">{tx.readyBody}</p>
+                <a href={smsHref(delivery.toPhone || "", tx.smsBody(delivery.fromName || "", delivery.link))} className="btn-primary"><MessageSquare className="h-5 w-5" /> {tx.textIt(delivery.toName || "")}</a>
+                {typeof navigator !== "undefined" && "share" in navigator && (
+                  <button onClick={() => { navigator.share({ text: tx.smsBody(delivery.fromName || "", delivery.link || ""), url: delivery.link }).catch(() => undefined); }} className="btn-secondary"><Share2 className="h-5 w-5" /> {tx.shareIt}</button>
+                )}
+                <button onClick={() => { navigator.clipboard?.writeText(delivery.link || "").then(() => setCopied(true)).catch(() => undefined); }} className="btn-ghost"><Copy className="h-4 w-4" /> {copied ? tx.copied : tx.copyLink}</button>
+                <a href={delivery.link} target="_blank" rel="noopener noreferrer" className="btn-ghost"><CheckCircle2 className="h-4 w-4" /> {t.viewCard}</a>
+                <button onClick={startOver} className="btn-ghost"><RotateCcw className="h-4 w-4" /> {t.another}</button>
+              </div>
+            )}
+            {delivery?.state === "sent" && !delivery.byText && (
               <div className="space-y-5">
                 <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-pink-500 to-amber-400 text-4xl shadow-xl shadow-pink-500/30">💌</div>
                 <h2 className="title-serif text-4xl font-semibold text-amber-50">{t.sentTitle(delivery.toName || "")}</h2>

@@ -18,6 +18,11 @@ export async function POST(req: NextRequest) {
     }
     const link = `${appUrl(req)}/c/${card.id}`;
     const base = { paid: true, link, toName: card.to_name, toEmail: card.to_email, kind: card.kind, cardId: card.card_id };
+    // Text delivery: the buyer sends the link from their own phone, so there's nothing to send here.
+    if (card.deliver_by === "text") {
+      if (!card.sent_at) await updateCard(card.id, { sent_at: new Date().toISOString(), send_error: null });
+      return NextResponse.json({ ...base, sent: true, byText: true, toPhone: card.to_phone, fromName: card.from_name });
+    }
     if (card.sent_at) return NextResponse.json({ ...base, sent: true });
     try {
       await sendEmail(card.to_email, cardEmail({ lang: card.lang, toName: card.to_name, fromName: card.from_name, link, kind: card.kind, imageUrl: card.image_url }));
