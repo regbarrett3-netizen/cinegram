@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { CARD_OCCASIONS, isCardOccasion } from "../../../lib/cardsCatalog";
+import { CARD_OCCASIONS, isArtOccasion } from "../../../lib/cardsCatalog";
 import { OccasionView } from "../../../components/cards/OccasionView";
 
 export function generateStaticParams() {
@@ -7,6 +7,6 @@ export function generateStaticParams() {
 }
 
 export default function OccasionPage({ params }: { params: { occasion: string } }) {
-  if (!isCardOccasion(params.occasion)) notFound();
+  if (!isArtOccasion(params.occasion)) notFound();
   return <OccasionView occasion={params.occasion} />;
 }

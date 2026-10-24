@@ -15,9 +15,13 @@ import { CARD_FONT_FAMILY } from "../lib/cardFont";
 import { loadImage } from "../lib/polaroid";
 import { actionTextFor } from "../lib/send";
 import { SITE } from "../lib/siteText";
+import { GROWTH } from "../lib/growthText";
 import type { Lang } from "../lib/i18n";
 
 export type PublicCard = {
+  id: string;
+  /** True when a reply can be sent straight back for free. */
+  replyFree: boolean;
   kind: "quick" | "action" | "video";
   cardId: string | null;
   occasion: string | null;
@@ -125,7 +129,8 @@ export function RecipientView({ card }: { card: PublicCard }) {
           {card.kind === "video" && card.videoUrl && (
             <a href={card.videoUrl} download className="btn-secondary"><Download className="h-5 w-5" /> {t.rDownload}</a>
           )}
-          <Link href={`/?lang=${lang}`} className="btn-primary"><Heart className="h-5 w-5" /> {t.rMake}</Link>
+          <Link href={`/?reply=${card.id}&lang=${lang}`} className="btn-primary"><Heart className="h-5 w-5" /> {GROWTH[lang].replyBtn}</Link>
+          {card.replyFree && <p className="-mt-2 text-center text-sm text-white/60">{GROWTH[lang].replyFreeNote}</p>}
         </div>
       )}
     </main>

@@ -3,6 +3,7 @@
 
 export type Inst =
   | "piano" | "bell" | "celesta" | "musicbox" | "vibe" | "harp" | "pluck" | "pizz" | "pad" | "strings" | "flute" | "brass" | "bass"
+  | "theremin" | "choir" | "organ"
   | "kick" | "snare" | "clap" | "hat" | "ride" | "shaker" | "sleigh" | "timp" | "crash" | "swell" | "whoosh" | "pop" | "fizz" | "thump" | "tick" | "wind";
 
 export type Ev = { t: number; d: number; f: number; v: number; i: Inst };
@@ -167,6 +168,36 @@ function play(c: Ctx, out: AudioNode, e: Ev, nb: AudioBuffer) {
       const g = c.createGain(); g.connect(lp);
       adsr(g.gain, t, 0.006, v * 0.55, 0.45, 0.35, end, 0.08);
       osc(c, "triangle", f, t, end + 0.8, g); osc(c, "sine", f, t, end + 0.8, gain(c, g, 0.6));
+      break;
+    }
+    case "theremin": {
+      // Spooky sine with a wide vibrato and a little scoop up into each note.
+      const g = gain(c, out, 0);
+      adsr(g.gain, t, 0.09, v * 0.42, 0.4, 0.9, end, 0.12);
+      const o = osc(c, "sine", f * 0.94, t, end + 0.7, g);
+      o.frequency.setTargetAtTime(f, t, 0.035);
+      const lfo = c.createOscillator(); lfo.frequency.value = 6.2; const dg = c.createGain(); dg.gain.setValueAtTime(8, t); dg.gain.linearRampToValueAtTime(28, t + 0.4); lfo.connect(dg); dg.connect(o.detune); lfo.start(t); lfo.stop(end + 0.7);
+      osc(c, "triangle", f * 2, t, end + 0.7, gain(c, g, 0.06));
+      break;
+    }
+    case "choir": {
+      // Two detuned saws through "ooh" formants.
+      const g = c.createGain();
+      adsr(g.gain, t, 0.28, v * 0.5, 1, 0.9, end, 0.4);
+      const f1 = filt(c, out, "bandpass", 420, 5), f2 = filt(c, gain(c, out, 0.45), "bandpass", 880, 6);
+      g.connect(f1); g.connect(f2);
+      for (const dt of [-9, 0, 9]) {
+        const o = osc(c, "sawtooth", f, t, end + 1, g, dt);
+        const lfo = c.createOscillator(); lfo.frequency.value = 5 + dt * 0.02; const dg = c.createGain(); dg.gain.value = 7; lfo.connect(dg); dg.connect(o.detune); lfo.start(t); lfo.stop(end + 1);
+      }
+      break;
+    }
+    case "organ": {
+      const trem = gain(c, out, 1);
+      const lfo = c.createOscillator(); lfo.frequency.value = 6; const depth = c.createGain(); depth.gain.value = 0.12; lfo.connect(depth); depth.connect(trem.gain); lfo.start(t); lfo.stop(end + 0.5);
+      const g = gain(c, trem, 0);
+      adsr(g.gain, t, 0.02, v * 0.26, 0.3, 1, end, 0.12);
+      for (const [r, amp] of [[0.5, 0.5], [1, 1], [2, 0.55], [3, 0.3], [4, 0.18]] as [number, number][]) osc(c, "sine", f * r, t, end + 0.5, gain(c, g, amp));
       break;
     }
     /* percussion & effects */

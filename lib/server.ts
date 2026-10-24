@@ -335,11 +335,17 @@ export async function stripeCreateSendCheckout(o: { orderId: string; title: stri
 
 /** True only when the session is paid and belongs to this order. */
 export async function stripeSendPaid(sessionId: string, orderId: string): Promise<boolean> {
-  if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return false;
+  return (await stripeSendSession(sessionId, orderId)).paid;
+}
+
+/** Whether the session is paid for this order, plus the buyer's email (used to route replies back to them). */
+export async function stripeSendSession(sessionId: string, orderId: string): Promise<{ paid: boolean; email: string | null }> {
+  if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return { paid: false, email: null };
   const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, { headers: await stripeAuth(), cache: "no-store" });
-  if (!res.ok) return false;
-  const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; order_id?: string } };
-  return s.payment_status === "paid" && s.metadata?.kind === "send" && s.metadata?.order_id === orderId;
+  if (!res.ok) return { paid: false, email: null };
+  const s = (await res.json()) as { payment_status?: string; metadata?: { kind?: string; order_id?: string }; customer_details?: { email?: string | null } | null };
+  const paid = s.payment_status === "paid" && s.metadata?.kind === "send" && s.metadata?.order_id === orderId;
+  return { paid, email: paid ? (s.customer_details?.email || null) : null };
 }
 
 export function appUrl(req: Request): string {

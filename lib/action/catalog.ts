@@ -1,5 +1,6 @@
 // Action Cards: short animated cards sold as a video download ($2.99).
 import type { Lang } from "../i18n";
+import { HALLOWEEN_IDS, HALLOWEEN_POSTER_T, HALLOWEEN_PRICE_CENTS, HALLOWEEN_TEXT, isHalloweenId, type HalloweenId } from "./halloweenText";
 
 export const ACTION_PRICE_CENTS = 299;
 
@@ -7,19 +8,28 @@ export const ACTION_IDS = [
   "balloons", "roses", "doves", "lanterns", "fireworks", "hearts", "butterflies", "petals",
   "confetti", "champagne", "candles", "shooting", "snow", "sunflowers", "dandelion", "gift",
 ] as const;
-export type ActionId = (typeof ACTION_IDS)[number];
-export const isActionId = (x: unknown): x is ActionId => ACTION_IDS.includes(x as ActionId);
+/** The year-round cards (the Action Cards page sells these). */
+type CoreId = (typeof ACTION_IDS)[number];
+/** Every animated card, including seasonal ones. */
+export type ActionId = CoreId | HalloweenId;
+export const ALL_ACTION_IDS: readonly ActionId[] = [...ACTION_IDS, ...HALLOWEEN_IDS];
+export const isActionId = (x: unknown): x is ActionId => ACTION_IDS.includes(x as CoreId) || isHalloweenId(x);
+export const isCoreActionId = (x: unknown): x is CoreId => ACTION_IDS.includes(x as CoreId);
+
+/** Price of one animated card when sent: seasonal specials can be cheaper. */
+export const actionPriceCents = (id: ActionId): number => (isHalloweenId(id) ? HALLOWEEN_PRICE_CENTS : ACTION_PRICE_CENTS);
 
 /** Moment used for the still thumbnail (seconds). */
-export const POSTER_T: Record<ActionId, number> = {
+const CORE_POSTER_T: Record<CoreId, number> = {
   balloons: 2.6, roses: 5.2, doves: 2.4, lanterns: 5, fireworks: 4.7, hearts: 5, butterflies: 3.2, petals: 6.2,
   confetti: 1.9, champagne: 2, candles: 5, shooting: 6.4, snow: 5, sunflowers: 5.6, dandelion: 3.8, gift: 2.4,
 };
+export const POSTER_T: Record<ActionId, number> = { ...CORE_POSTER_T, ...HALLOWEEN_POSTER_T };
 
 type T = { name: string; h: string; m: string };
 type L<X> = Record<Lang, X>;
 
-export const ACTION_TEXT: L<Record<ActionId, T>> = {
+const CORE_TEXT: L<Record<CoreId, T>> = {
   en: {
     balloons: { name: "Balloon Release", h: "Let It Fly", m: "Sending a sky full of wishes your way. May every one of them come true." },
     roses: { name: "A Dozen Roses", h: "A Dozen Roses for You", m: "Twelve roses, one for every reason my heart belongs to you." },
@@ -128,6 +138,15 @@ export const ACTION_TEXT: L<Record<ActionId, T>> = {
     dandelion: { name: "蒲公英心願", h: "掛住你", m: "最近我許嘅每一個願，都飄咗去你嗰度。" },
     gift: { name: "驚喜禮物", h: "俾你嘅驚喜", m: "有啲禮物係裝喺盒入面，而最好嘅禮物就係你。" },
   },
+};
+
+export const ACTION_TEXT: L<Record<ActionId, T>> = {
+  en: { ...CORE_TEXT.en, ...HALLOWEEN_TEXT.en },
+  es: { ...CORE_TEXT.es, ...HALLOWEEN_TEXT.es },
+  fr: { ...CORE_TEXT.fr, ...HALLOWEEN_TEXT.fr },
+  pt: { ...CORE_TEXT.pt, ...HALLOWEEN_TEXT.pt },
+  zh: { ...CORE_TEXT.zh, ...HALLOWEEN_TEXT.zh },
+  yue: { ...CORE_TEXT.yue, ...HALLOWEEN_TEXT.yue },
 };
 
 type Ui = {

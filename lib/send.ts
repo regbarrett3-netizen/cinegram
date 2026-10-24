@@ -1,5 +1,5 @@
 // Shared rules for the 1-2-3 send flow (safe for browser and server).
-import { ACTION_TEXT, type ActionId } from "./action/catalog";
+import { ACTION_TEXT, actionPriceCents, isActionId, type ActionId } from "./action/catalog";
 import { CARD_TEXT, type CardOccasion } from "./cardsCatalog";
 import type { Lang } from "./i18n";
 
@@ -15,6 +15,11 @@ export const FINAL_SALE: Record<Lang, string> = {
   yue: "所有購買都唔設退款。賀卡會即刻送到。",
 };
 export const priceLabel = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+/** What one card costs to send. Seasonal animated cards can cost less than the usual price for their kind. */
+export function priceFor(kind: SendKind, cardId?: string | null): number {
+  if (kind === "action" && cardId && isActionId(cardId)) return actionPriceCents(cardId);
+  return PRICE[kind];
+}
 
 /** Action cards that suit each occasion, best first. */
 export const OCCASION_ACTIONS: Record<CardOccasion, ActionId[]> = {
@@ -30,6 +35,7 @@ export const OCCASION_ACTIONS: Record<CardOccasion, ActionId[]> = {
   sympathy: ["doves", "lanterns", "dandelion", "butterflies", "shooting", "roses"],
   thinking: ["dandelion", "hearts", "lanterns", "butterflies", "shooting", "balloons"],
   holidays: ["snow", "lanterns", "fireworks", "gift", "champagne", "shooting"],
+  halloween: ["dragon", "pumpkins", "skeletons", "monster", "witch", "graveyard", "vampire"],
 };
 
 /** Occasions where an action card's own wording already fits. */
@@ -38,13 +44,14 @@ const ACTION_HOME: Record<ActionId, CardOccasion[]> = {
   hearts: ["love"], butterflies: ["baby"], petals: ["love", "anniversary", "wedding"], confetti: ["congrats", "birthday", "graduation"],
   champagne: ["congrats", "anniversary", "wedding", "graduation"], candles: ["birthday"], shooting: ["thinking"], snow: ["holidays"],
   sunflowers: [], dandelion: ["thinking"], gift: ["birthday"],
+  dragon: ["halloween"], pumpkins: ["halloween"], skeletons: ["halloween"], monster: ["halloween"], witch: ["halloween"], graveyard: ["halloween"], vampire: ["halloween"],
 };
 
 /** A general greeting for each occasion, borrowed from its most versatile art card. */
 const OCCASION_GREETING: Record<CardOccasion, string> = {
   birthday: "bdayBalloons", love: "loveRoseWreath", anniversary: "annivRings", wedding: "weddingArch", baby: "babyMoon",
   graduation: "gradCaps", congrats: "congratsFireworks", thanks: "thanksTulips", getwell: "getwellWindow",
-  sympathy: "sympathyLilies", thinking: "thinkingDandelion", holidays: "holidayWreath",
+  sympathy: "sympathyLilies", thinking: "thinkingDandelion", holidays: "holidayWreath", halloween: "thinkingDandelion",
 };
 
 /** Headline and message for an action card sent for a given occasion. */
