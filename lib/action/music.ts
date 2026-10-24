@@ -1,12 +1,13 @@
 // Original music for each action card, timed to its animation (~8.8 s).
 import { Song, renderSong } from "./synth";
 import type { ActionId } from "./catalog";
+import { HALLOWEEN_SONGS } from "./musicHalloween";
 
 export const MUSIC_LEN = 8.8;
 
 const C = (s: string) => s.split(" ");
 
-const SONGS: Record<ActionId, () => Song> = {
+const CORE_SONGS: Record<Exclude<ActionId, keyof typeof HALLOWEEN_SONGS>, () => Song> = {
   /** Bright, lifting tune in C — the balloons let go at 1.4 s. */
   balloons: () => {
     const s = new Song(112);
@@ -236,6 +237,8 @@ const SONGS: Record<ActionId, () => Song> = {
     return s;
   },
 };
+
+const SONGS: Record<ActionId, () => Song> = { ...CORE_SONGS, ...HALLOWEEN_SONGS };
 
 const cache = new Map<ActionId, Promise<AudioBuffer>>();
 

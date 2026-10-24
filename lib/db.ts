@@ -8,7 +8,7 @@ function key(): string {
   if (!k) throw new Error("Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it in your hosting settings.");
   return k;
 }
-const headers = () => ({ apikey: key(), Authorization: `Bearer ${key()}` });
+export const headers = () => ({ apikey: key(), Authorization: `Bearer ${key()}` });
 
 export type SentCard = {
   id: string;
@@ -31,6 +31,10 @@ export type SentCard = {
   sent_at: string | null;
   opened_at: string | null;
   send_error: string | null;
+  /** The card this one replies to (null for ordinary cards). */
+  reply_to: string | null;
+  /** The buyer's email from Stripe checkout, so a reply can reach them without showing their address. */
+  sender_email: string | null;
 };
 
 /** Short, unguessable id for recipient links (12 chars, base62). */
@@ -40,7 +44,7 @@ export function newId(): string {
   return Array.from(bytes, (b) => chars[b % 62]).join("");
 }
 
-async function fail(res: Response, what: string): Promise<never> {
+export async function fail(res: Response, what: string): Promise<never> {
   const body = (await res.text().catch(() => "")).slice(0, 300);
   console.error(`${what} failed`, res.status, body);
   if (res.status === 401 || res.status === 403) throw new Error("The database rejected SUPABASE_SERVICE_ROLE_KEY. Check the key in Vercel.");
@@ -93,3 +97,10 @@ export async function uploadPublic(bucket: "photos" | "cards", path: string, fil
 /** Only our own storage URLs are accepted back from the browser. */
 export const isOurStorageUrl = (u: unknown): u is string =>
   typeof u === "string" && u.startsWith(`${SUPABASE_URL}/storage/v1/object/public/`) && u.length < 400;
+
+/** How many free replies have already been sent to a card (the first reply is free). */
+export async function freeRepliesTo(id: string): Promise<number> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/sent_cards?reply_to=eq.${id}&price_cents=eq.0&select=id`, { headers: headers(), cache: "no-store" });
+  if (!res.ok) await fail(res, "Checking replies");
+  return ((await res.json()) as unknown[]).length;
+}

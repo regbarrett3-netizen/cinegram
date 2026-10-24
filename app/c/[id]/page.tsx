@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getCard } from "../../../lib/db";
+import { freeRepliesTo, getCard } from "../../../lib/db";
 import { isLang } from "../../../lib/i18n";
 import { RecipientView, type PublicCard } from "../../../components/RecipientView";
 
@@ -22,7 +22,10 @@ export default async function CardPage({ params }: { params: { id: string } }) {
   const row = await getCard(params.id).catch(() => null);
   if (!row || !row.paid_at) notFound();
   // Only what the page needs: never the recipient's email address.
+  const replyFree = !!row.sender_email && (await freeRepliesTo(row.id).catch(() => 1)) === 0;
   const card: PublicCard = {
+    id: row.id,
+    replyFree,
     kind: row.kind,
     cardId: row.card_id,
     occasion: row.occasion,

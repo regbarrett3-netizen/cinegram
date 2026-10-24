@@ -15,12 +15,17 @@ export const CARD_OCCASIONS = [
   "birthday", "love", "anniversary", "wedding", "baby", "graduation",
   "congrats", "thanks", "getwell", "sympathy", "thinking", "holidays",
 ] as const;
-export type CardOccasion = (typeof CARD_OCCASIONS)[number];
-export const isCardOccasion = (x: unknown): x is CardOccasion => CARD_OCCASIONS.includes(x as CardOccasion);
+/** Seasonal occasions: animated cards only (no art cards), offered in the send flow while in season. */
+export const SEASONAL_OCCASIONS = ["halloween"] as const;
+export type CardOccasion = (typeof CARD_OCCASIONS)[number] | (typeof SEASONAL_OCCASIONS)[number];
+export const isCardOccasion = (x: unknown): x is CardOccasion =>
+  CARD_OCCASIONS.includes(x as (typeof CARD_OCCASIONS)[number]) || SEASONAL_OCCASIONS.includes(x as (typeof SEASONAL_OCCASIONS)[number]);
+/** Art-card occasions (the ones with a /cards page). */
+export const isArtOccasion = (x: unknown): x is (typeof CARD_OCCASIONS)[number] => CARD_OCCASIONS.includes(x as (typeof CARD_OCCASIONS)[number]);
 
 export const OCCASION_EMOJI: Record<CardOccasion, string> = {
   birthday: "🎂", love: "💕", anniversary: "💍", wedding: "🕊️", baby: "🌙", graduation: "🎓",
-  congrats: "🎉", thanks: "🌷", getwell: "🌈", sympathy: "🕯️", thinking: "💌", holidays: "❄️",
+  congrats: "🎉", thanks: "🌷", getwell: "🌈", sympathy: "🕯️", thinking: "💌", holidays: "❄️", halloween: "🎃",
 };
 
 /** The artwork used as each occasion's button thumbnail. */
@@ -28,18 +33,19 @@ export const OCCASION_COVER: Record<CardOccasion, string> = {
   birthday: "bdayCandles", love: "loveConstellation", anniversary: "annivLanterns", wedding: "weddingDoves",
   baby: "babyMoon", graduation: "gradCaps", congrats: "congratsFireworks", thanks: "thanksTulips",
   getwell: "getwellRainbow", sympathy: "sympathyLilies", thinking: "thinkingDandelion", holidays: "holidayVillage",
+  halloween: "", // shown as an animated card instead of art
 };
 
 type L<T> = Record<Lang, T>;
 type CardText = { h: string; m: string };
 
 export const OCCASION_NAMES: L<Record<CardOccasion, string>> = {
-  en: { birthday: "Birthday", love: "Love", anniversary: "Anniversary", wedding: "Wedding", baby: "New Baby", graduation: "Graduation", congrats: "Congratulations", thanks: "Thank You", getwell: "Get Well", sympathy: "Sympathy", thinking: "Thinking of You", holidays: "Holidays" },
-  es: { birthday: "Cumpleaños", love: "Amor", anniversary: "Aniversario", wedding: "Boda", baby: "Bebé", graduation: "Graduación", congrats: "Felicitaciones", thanks: "Gracias", getwell: "Mejórate", sympathy: "Condolencias", thinking: "Pienso en ti", holidays: "Fiestas" },
-  fr: { birthday: "Anniversaire", love: "Amour", anniversary: "Anniversaire de couple", wedding: "Mariage", baby: "Naissance", graduation: "Diplôme", congrats: "Félicitations", thanks: "Merci", getwell: "Prompt rétablissement", sympathy: "Condoléances", thinking: "Je pense à toi", holidays: "Fêtes" },
-  pt: { birthday: "Aniversário", love: "Amor", anniversary: "Aniversário de casal", wedding: "Casamento", baby: "Bebé", graduation: "Formatura", congrats: "Parabéns", thanks: "Obrigado", getwell: "As melhoras", sympathy: "Condolências", thinking: "Penso em ti", holidays: "Festas" },
-  zh: { birthday: "生日", love: "爱情", anniversary: "纪念日", wedding: "婚礼", baby: "新生宝宝", graduation: "毕业", congrats: "祝贺", thanks: "感谢", getwell: "早日康复", sympathy: "慰问", thinking: "想念你", holidays: "节日" },
-  yue: { birthday: "生日", love: "愛情", anniversary: "紀念日", wedding: "婚禮", baby: "BB出世", graduation: "畢業", congrats: "恭喜", thanks: "多謝", getwell: "早日康復", sympathy: "慰問", thinking: "掛住你", holidays: "節日" },
+  en: { birthday: "Birthday", love: "Love", anniversary: "Anniversary", wedding: "Wedding", baby: "New Baby", graduation: "Graduation", congrats: "Congratulations", thanks: "Thank You", getwell: "Get Well", sympathy: "Sympathy", thinking: "Thinking of You", holidays: "Holidays", halloween: "Halloween" },
+  es: { birthday: "Cumpleaños", love: "Amor", anniversary: "Aniversario", wedding: "Boda", baby: "Bebé", graduation: "Graduación", congrats: "Felicitaciones", thanks: "Gracias", getwell: "Mejórate", sympathy: "Condolencias", thinking: "Pienso en ti", holidays: "Fiestas", halloween: "Halloween" },
+  fr: { birthday: "Anniversaire", love: "Amour", anniversary: "Anniversaire de couple", wedding: "Mariage", baby: "Naissance", graduation: "Diplôme", congrats: "Félicitations", thanks: "Merci", getwell: "Prompt rétablissement", sympathy: "Condoléances", thinking: "Je pense à toi", holidays: "Fêtes", halloween: "Halloween" },
+  pt: { birthday: "Aniversário", love: "Amor", anniversary: "Aniversário de casal", wedding: "Casamento", baby: "Bebé", graduation: "Formatura", congrats: "Parabéns", thanks: "Obrigado", getwell: "As melhoras", sympathy: "Condolências", thinking: "Penso em ti", holidays: "Festas", halloween: "Halloween" },
+  zh: { birthday: "生日", love: "爱情", anniversary: "纪念日", wedding: "婚礼", baby: "新生宝宝", graduation: "毕业", congrats: "祝贺", thanks: "感谢", getwell: "早日康复", sympathy: "慰问", thinking: "想念你", holidays: "节日", halloween: "万圣节" },
+  yue: { birthday: "生日", love: "愛情", anniversary: "紀念日", wedding: "婚禮", baby: "BB出世", graduation: "畢業", congrats: "恭喜", thanks: "多謝", getwell: "早日康復", sympathy: "慰問", thinking: "掛住你", holidays: "節日", halloween: "萬聖節" },
 };
 
 export type CardDef = { id: string; occasion: CardOccasion };

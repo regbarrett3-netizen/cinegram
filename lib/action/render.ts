@@ -2,12 +2,13 @@
 import { DUR, H, W, ease, seg, type Ctx } from "./engine";
 import { SCENES1, type Scene } from "./scenes1";
 import { SCENES2 } from "./scenes2";
+import { HALLOWEEN_SCENES } from "./scenesHalloween";
 import { ACTION_TEXT, type ActionId } from "./catalog";
 import { CARD_UI } from "../cardsCatalog";
 import type { Lang } from "../i18n";
 import { polaroid } from "../polaroid";
 
-const FACTORIES: Record<ActionId, () => Scene> = { ...SCENES1, ...SCENES2 };
+const FACTORIES: Record<ActionId, () => Scene> = { ...SCENES1, ...SCENES2, ...HALLOWEEN_SCENES };
 const cache = new Map<ActionId, Scene>();
 export function scene(id: ActionId): Scene {
   let s = cache.get(id);
