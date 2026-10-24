@@ -35,7 +35,7 @@ export const OCCASION_ACTIONS: Record<CardOccasion, ActionId[]> = {
   sympathy: ["doves", "lanterns", "dandelion", "butterflies", "shooting", "roses"],
   thinking: ["dandelion", "hearts", "lanterns", "butterflies", "shooting", "balloons"],
   holidays: ["snow", "lanterns", "fireworks", "gift", "champagne", "shooting"],
-  halloween: ["pumpkins", "skeletons", "monster", "witch", "graveyard", "vampire"],
+  halloween: ["dragon", "pumpkins", "skeletons", "monster", "witch", "graveyard", "vampire"],
 };
 
 /** Occasions where an action card's own wording already fits. */
@@ -44,7 +44,7 @@ const ACTION_HOME: Record<ActionId, CardOccasion[]> = {
   hearts: ["love"], butterflies: ["baby"], petals: ["love", "anniversary", "wedding"], confetti: ["congrats", "birthday", "graduation"],
   champagne: ["congrats", "anniversary", "wedding", "graduation"], candles: ["birthday"], shooting: ["thinking"], snow: ["holidays"],
   sunflowers: [], dandelion: ["thinking"], gift: ["birthday"],
-  pumpkins: ["halloween"], skeletons: ["halloween"], monster: ["halloween"], witch: ["halloween"], graveyard: ["halloween"], vampire: ["halloween"],
+  dragon: ["halloween"], pumpkins: ["halloween"], skeletons: ["halloween"], monster: ["halloween"], witch: ["halloween"], graveyard: ["halloween"], vampire: ["halloween"],
 };
 
 /** A general greeting for each occasion, borrowed from its most versatile art card. */

@@ -3,6 +3,7 @@
 import { H, W, clamp, ease, glow, lerp, rng, seg, sky, sparkle, stars, type Ctx } from "./engine";
 import type { Scene } from "./scenes1";
 import type { HalloweenId } from "./halloweenText";
+import { drawShow, type DragonShow } from "./dragon";
 
 const TAU = Math.PI * 2;
 const frac = (x: number) => x - Math.floor(x);
@@ -466,7 +467,40 @@ const vampireScene = (): Scene => ({
   },
 });
 
+/* ---------------- dragon fire ---------------- */
+
+/** Splits a headline into at most two balanced lines (word languages only). */
+export function fireLines(text: string): string[] {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 2) return [text.trim()];
+  let best = 1, diff = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const d = Math.abs(words.slice(0, i).join(" ").length - words.slice(i).join(" ").length);
+    if (d < diff) { diff = d; best = i; }
+  }
+  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+}
+
+const dragonScene = (): Scene => {
+  const shows = new Map<string, DragonShow>();
+  return {
+    ink: "#fff1dc", scrim: "14,4,16", accent: "#ff9a3c", textIn: 6.4, ownHeadline: true,
+    draw(c, t, info) {
+      const headline = info?.headline || "Happy Halloween";
+      const font = info?.fontFamily || "serif";
+      const key = `${headline}|${font}`;
+      let show = shows.get(key);
+      if (!show) {
+        show = { exitAt: 6.3, fontFamily: font, breaths: [{ start: 4.35, sweep: 1.25, lines: fireLines(headline), px: 118, cy: 470 }] };
+        shows.set(key, show);
+      }
+      drawShow(c, t, show);
+    },
+  };
+};
+
 export const HALLOWEEN_SCENES: Record<HalloweenId, () => Scene> = {
+  dragon: dragonScene,
   pumpkins: pumpkinsScene,
   skeletons: skeletonsScene,
   monster: monsterScene,

@@ -55,13 +55,14 @@ function fit(c: Ctx, text: string, maxW: number, start: number, min: number, mak
 /** Draws frame t (seconds) of an action card into a 720×1280 coordinate space. */
 export function drawFrame(c: Ctx, id: ActionId, t: number, o: FrameOpts) {
   const s = scene(id);
+  const txt = o.text || ACTION_TEXT[o.lang][id] || ACTION_TEXT.en[id];
   c.save();
-  s.draw(c, Math.min(t, DUR));
+  s.draw(c, Math.min(t, DUR), { headline: txt.h, fontFamily: o.fontFamily });
   c.restore();
 
-  const a = ease.out(seg(t, TEXT_IN, TEXT_IN + 1));
+  const textIn = s.textIn ?? TEXT_IN;
+  const a = ease.out(seg(t, textIn, textIn + 1));
   if (a > 0) {
-    const txt = o.text || ACTION_TEXT[o.lang][id] || ACTION_TEXT.en[id];
     const ui = CARD_UI[o.lang];
     const cjk = isCjk(o.lang);
     const g = c.createLinearGradient(0, H * 0.6, 0, H);
@@ -85,8 +86,10 @@ export function drawFrame(c: Ctx, id: ActionId, t: number, o: FrameOpts) {
       c.fillText(cjk ? ui.forLine(to) : ui.forLine(to).toUpperCase(), 360, 950 + rise);
       c.globalAlpha = a;
     }
-    fit(c, txt.h, 640, cjk ? 58 : 68, 34, (px) => `600 ${px}px ${o.fontFamily}`);
-    c.fillText(txt.h, 360, 1020 + rise);
+    if (!s.ownHeadline) {
+      fit(c, txt.h, 640, cjk ? 58 : 68, 34, (px) => `600 ${px}px ${o.fontFamily}`);
+      c.fillText(txt.h, 360, 1020 + rise);
+    }
     c.strokeStyle = s.accent; c.fillStyle = s.accent; c.lineWidth = 2;
     c.beginPath(); c.moveTo(300, 1050 + rise); c.lineTo(348, 1050 + rise); c.moveTo(372, 1050 + rise); c.lineTo(420, 1050 + rise); c.stroke();
     c.beginPath(); c.moveTo(360, 1043 + rise); c.lineTo(367, 1050 + rise); c.lineTo(360, 1057 + rise); c.lineTo(353, 1050 + rise); c.fill();

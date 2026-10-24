@@ -6,7 +6,36 @@ const C = (s: string) => s.split(" ");
 type Mel = [number, number, string][];
 const play = (s: Song, i: Parameters<Song["n"]>[0], mel: Mel, v: number) => { for (const [b, d, p] of mel) s.n(i, b, d, p, v); };
 
+/** Dragon: dark brass and drums while it circles, a roar as it hits the screen, then a fiery fanfare as it writes. */
+export function dragonSong(len: number, breaths: number[], roarAt = 3.45): Song {
+  const s = new Song(96, { reverb: 0.4 });
+  const beat = 60 / 96;
+  const b = (sec: number) => sec / beat;
+  // brooding opening in D minor
+  s.n("strings", 0, b(3.2), C("D3 A3 D4"), 0.3).n("bass", 0, b(3.2), "D2", 0.45).n("choir", 0, b(3.2), C("D4 F4 A4"), 0.35);
+  play(s, "brass", [[0, 1, "D3"], [1, 0.5, "F3"], [1.5, 0.5, "A3"], [2, 2, "D4"], [4, 1, "C4"], [5, 1, "Bb3"]], 0.4);
+  s.hit("timp", [0, 2, 4, 4.5], 0.5, 1, 73.4);
+  s.at("swell", roarAt - 0.9, 0.9, null, 0.6).at("thump", roarAt, 0.6, null, 1).at("crash", roarAt, 2, null, 0.6).at("wind", roarAt - 0.1, 1.2, null, 0.9);
+  for (const t0 of breaths) {
+    s.at("wind", t0 - 0.2, 1.8, null, 0.9).at("fizz", t0, 1.4, null, 0.6).at("whoosh", t0 - 0.25, 0.5, null, 0.6);
+  }
+  // triumphant D major once the fire starts
+  const f = b(breaths[0] - 0.1);
+  const chords: [number, string[], string][] = [[0, C("D4 F#4 A4"), "D2"], [2, C("D4 G4 Bb4"), "G1"], [4, C("E4 A4 C#5"), "A1"], [6, C("D4 F#4 A4 D5"), "D2"]];
+  const reps = Math.max(1, Math.ceil((b(len) - f) / 8));
+  for (let r = 0; r < reps; r++) for (const [o, ch, root] of chords) {
+    const at = f + r * 8 + o;
+    if (at > b(len)) break;
+    s.n("brass", at, 1.8, ch, 0.42).n("choir", at, 2, ch, 0.35).n("bass", at, 2, root, 0.5);
+    s.hit("timp", [at, at + 1.5], 0.35, 1, 73.4);
+  }
+  play(s, "brass", [[f, 1, "A4"], [f + 1, 0.5, "D5"], [f + 1.5, 0.5, "E5"], [f + 2, 2, "F#5"], [f + 4, 1, "E5"], [f + 5, 1, "C#5"], [f + 6, 2, "D5"]], 0.45);
+  C("D6 F#6 A6 D7").forEach((p, k) => s.at("bell", breaths[0] + 1.4 + k * 0.08, 1.5, p, 0.25));
+  return s;
+}
+
 export const HALLOWEEN_SONGS: Record<HalloweenId, () => Song> = {
+  dragon: () => dragonSong(8.8, [4.35]),
   /** Candles light one by one (bells), then a solemn, slightly silly pumpkin choir in A minor. */
   pumpkins: () => {
     const s = new Song(72, { reverb: 0.45 });

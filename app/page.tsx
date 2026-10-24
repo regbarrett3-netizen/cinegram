@@ -213,12 +213,24 @@ export default function SendFlow() {
       <div ref={top} className="w-full max-w-5xl scroll-mt-4">
         {step !== "done" && (
           <>
-            {step === 1 && (
+            {step === 1 && (seasonal ? (
+              <section className="mb-10 flex flex-col items-center gap-6 text-center sm:flex-row sm:items-center sm:text-left">
+                <div className="w-44 shrink-0 sm:w-52">
+                  <ActionCanvas id="dragon" lang={lang} playing maxScale={0.6} label={GROWTH[lang].heroTitle} />
+                </div>
+                <div className="min-w-0">
+                  <span className="inline-block rounded-full bg-orange-500 px-3 py-1 text-xs font-bold text-white shadow-lg">🎃 {gx.halloweenBadge}</span>
+                  <h1 className="title-serif mt-3 text-4xl sm:text-6xl font-semibold leading-tight text-amber-50">{gx.heroTitle}</h1>
+                  <p className="mt-3 max-w-xl text-sm sm:text-base text-white/65">{gx.heroSub}</p>
+                  <button onClick={() => { setOccasion("halloween"); setChoice(null); setReply(null); go(2); }} className="btn-primary mt-5 w-auto px-6">{gx.heroCta} <ChevronRight className="h-5 w-5" /></button>
+                </div>
+              </section>
+            ) : (
               <section className="mb-8 text-center">
                 <h1 className="title-serif text-4xl sm:text-6xl font-semibold leading-tight text-amber-50">{t.heroTitle}</h1>
                 <p className="mx-auto mt-3 max-w-xl text-sm sm:text-base text-white/65">{t.heroSub}</p>
               </section>
-            )}
+            ))}
             <Stepper labels={t.steps} current={stepIdx} onJump={(n) => n < stepIdx && go(n as Step)} />
           </>
         )}
@@ -236,7 +248,7 @@ export default function SendFlow() {
                   <div className="aspect-[4/3] overflow-hidden">
                     {o === "halloween" ? (
                       <div className="h-full w-full transition duration-500 group-hover:scale-105 [&>canvas]:!rounded-none [&>canvas]:!shadow-none [&>canvas]:-translate-y-[32%]">
-                        <ActionCanvas id="pumpkins" lang={lang} maxScale={0.5} label={names.halloween} />
+                        <ActionCanvas id="dragon" lang={lang} maxScale={0.5} label={names.halloween} />
                       </div>
                     ) : (
                       /* eslint-disable-next-line @next/next/no-img-element */

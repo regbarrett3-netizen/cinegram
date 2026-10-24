@@ -7,8 +7,14 @@ export type Scene = {
   /** RGB triple for the dark/light band behind the greeting, e.g. "20,10,30". */
   scrim: string;
   accent: string;
-  draw: (c: Ctx, t: number) => void;
+  /** `info` carries the card's headline for scenes that draw it themselves. */
+  draw: (c: Ctx, t: number, info?: SceneInfo) => void;
+  /** When the greeting fades in (default 3.3 s). */
+  textIn?: number;
+  /** The scene writes the headline itself (e.g. in fire), so the overlay shows only the names and message. */
+  ownHeadline?: boolean;
 };
+export type SceneInfo = { headline: string; fontFamily: string };
 void DUR;
 
 /* ---------------- balloon release ---------------- */

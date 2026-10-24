@@ -2,6 +2,9 @@
 import type { Lang } from "./i18n";
 
 type G = {
+  heroTitle: string;
+  heroSub: string;
+  heroCta: string;
   halloweenBadge: string;
   halloweenSub: string;
   replyBtn: string;
@@ -24,6 +27,7 @@ type G = {
 
 export const GROWTH: Record<Lang, G> = {
   en: {
+    heroTitle: "Halloween Card Special: $0.99", heroSub: "A dragon writes your greeting in fire, pumpkins sing, skeletons dance. Animated cards with original music, emailed for you. Until November 2.", heroCta: "Send a Halloween card",
     halloweenBadge: "Halloween special · $0.99", halloweenSub: "Animated, with original music · $0.99 until Nov 2",
     replyBtn: "Reply with a card", replyFreeNote: "Your first reply is free.",
     replyingTo: (n) => `Replying to ${n}`, replyHidden: (n) => `We'll deliver it straight to ${n}. You don't need their email.`,
@@ -34,6 +38,7 @@ export const GROWTH: Record<Lang, G> = {
     months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
   },
   es: {
+    heroTitle: "Especial de Halloween: 0,99 US$", heroSub: "Un dragón escribe tu saludo con fuego, las calabazas cantan y los esqueletos bailan. Tarjetas animadas con música original, enviadas por correo. Hasta el 2 de noviembre.", heroCta: "Enviar una tarjeta de Halloween",
     halloweenBadge: "Especial de Halloween · 0,99 US$", halloweenSub: "Animadas, con música original · 0,99 US$ hasta el 2 de nov.",
     replyBtn: "Responder con una tarjeta", replyFreeNote: "Tu primera respuesta es gratis.",
     replyingTo: (n) => `Respondiendo a ${n}`, replyHidden: (n) => `Se la entregamos directamente a ${n}. No necesitas su correo.`,
@@ -44,6 +49,7 @@ export const GROWTH: Record<Lang, G> = {
     months: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
   },
   fr: {
+    heroTitle: "Spécial Halloween : 0,99 $ US", heroSub: "Un dragon écrit ton message en flammes, les citrouilles chantent, les squelettes dansent. Cartes animées avec musique originale, envoyées par e-mail. Jusqu'au 2 novembre.", heroCta: "Envoyer une carte d'Halloween",
     halloweenBadge: "Spécial Halloween · 0,99 $ US", halloweenSub: "Animées, avec musique originale · 0,99 $ US jusqu'au 2 nov.",
     replyBtn: "Répondre avec une carte", replyFreeNote: "Ta première réponse est gratuite.",
     replyingTo: (n) => `Réponse à ${n}`, replyHidden: (n) => `Nous la livrons directement à ${n}. Pas besoin de son e-mail.`,
@@ -54,6 +60,7 @@ export const GROWTH: Record<Lang, G> = {
     months: ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
   },
   pt: {
+    heroTitle: "Especial Halloween: 0,99 USD", heroSub: "Um dragão escreve a tua mensagem com fogo, as abóboras cantam e os esqueletos dançam. Cartões animados com música original, enviados por e-mail. Até 2 de novembro.", heroCta: "Enviar um cartão de Halloween",
     halloweenBadge: "Especial Halloween · 0,99 USD", halloweenSub: "Animados, com música original · 0,99 USD até 2 de nov.",
     replyBtn: "Responder com um cartão", replyFreeNote: "A tua primeira resposta é grátis.",
     replyingTo: (n) => `A responder a ${n}`, replyHidden: (n) => `Entregamo-lo diretamente a ${n}. Não precisas do e-mail.`,
@@ -64,6 +71,7 @@ export const GROWTH: Record<Lang, G> = {
     months: ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"],
   },
   zh: {
+    heroTitle: "万圣节贺卡特惠：0.99 美元", heroSub: "巨龙用火焰写出你的祝福，南瓜唱歌，骷髅跳舞。配原创音乐的动态贺卡，我们替你用邮件寄出。11 月 2 日截止。", heroCta: "寄一张万圣节贺卡",
     halloweenBadge: "万圣节特惠 · 0.99 美元", halloweenSub: "会动，配原创音乐 · 11 月 2 日前 0.99 美元",
     replyBtn: "回一张贺卡", replyFreeNote: "第一次回卡免费。",
     replyingTo: (n) => `回复${n}`, replyHidden: (n) => `我们会直接送到${n}手上，你不需要对方的邮箱。`,
@@ -74,6 +82,7 @@ export const GROWTH: Record<Lang, G> = {
     months: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
   },
   yue: {
+    heroTitle: "萬聖節賀卡特價：0.99 美元", heroSub: "巨龍用火寫出你嘅祝福，南瓜唱歌，骷髏跳舞。配原創音樂嘅動態賀卡，我哋幫你用電郵寄出。11 月 2 日截止。", heroCta: "寄一張萬聖節賀卡",
     halloweenBadge: "萬聖節特價 · 0.99 美元", halloweenSub: "識郁，配原創音樂 · 11 月 2 日前 0.99 美元",
     replyBtn: "回一張賀卡", replyFreeNote: "第一次回卡免費。",
     replyingTo: (n) => `回覆${n}`, replyHidden: (n) => `我哋會直接送到${n}手上，你唔使知佢個電郵。`,
